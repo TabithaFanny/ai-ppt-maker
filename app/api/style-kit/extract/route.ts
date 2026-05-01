@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { withRetry, visionCompletion } from '@/lib/api-client';
+import { withRetry, visionCompletion, isMockMode } from '@/lib/api-client';
+import { mockStyleKitExtractResponse } from '@/lib/ai-mock-data';
 import { ok, fail } from '@/lib/api-response';
 
 interface SlideInput {
@@ -212,6 +213,11 @@ Respond ONLY in English with this exact JSON format - no additional text:
 
 export async function POST(request: NextRequest) {
   try {
+    // AI_MOCK=true: 直接返回 mock 风格分析结果
+    if (isMockMode()) {
+      return ok(mockStyleKitExtractResponse);
+    }
+
     const body = (await request.json()) as ExtractStyleDNARequest;
     const { slides, sourceFileId, sourceFileName } = body;
 
