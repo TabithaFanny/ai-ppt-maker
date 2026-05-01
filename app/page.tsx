@@ -75,10 +75,9 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right: Demo Showcase */}
-            <div className="relative">
-              <DemoShowcase />
-            </div>
+            {/* Right: 空（保持布局对称，lg下展示空白） */}
+            <div className="hidden lg:block" />
+
           </div>
         </div>
 
@@ -86,50 +85,34 @@ export default function Home() {
         <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-blue-100/50 to-transparent pointer-events-none" />
       </section>
 
-      {/* Three Step Flow */}
+      {/* Five Step Flow */}
       <section className="border-t bg-white py-16 md:py-24">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">三步生成专业 PPT</h2>
-            <p className="text-gray-600">简单直观的创作流程，让每一页都保持专业水准</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">五步生成专业 PPT</h2>
+            <p className="text-gray-600">从模板到成品，每个步骤清晰可控</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 md:gap-12">
+          <div className="grid md:grid-cols-5 gap-4 md:gap-6">
             {[
-              {
-                icon: Upload,
-                step: 1,
-                title: '上传模板',
-                description: '上传你喜欢的 PPT 作为参考，可以是 PDF、PPT 或 PPTX 格式',
-                color: 'blue',
-              },
-              {
-                icon: FileEdit,
-                step: 2,
-                title: '定义任务',
-                description: '输入你的主题和要点，选择使用场景和目标受众',
-                color: 'purple',
-              },
-              {
-                icon: Download,
-                step: 3,
-                title: '生成导出',
-                description: 'AI 自动生成，保持模板风格，一键导出 PPTX 文件',
-                color: 'green',
-              },
-            ].map((item) => (
+              { icon: Upload, step: 1, title: '上传模板', desc: 'PDF/PPT/PPTX' },
+              { icon: Sparkles, step: 2, title: '分析风格', desc: '配色+字体+排版' },
+              { icon: FileEdit, step: 3, title: '输入需求', desc: '主题+受众+要点' },
+              { icon: Layers, step: 4, title: '编辑内容', desc: '调整+AI配图' },
+              { icon: Download, step: 5, title: '导出完成', desc: 'PPTX/JSON' },
+            ].map((item, i) => (
               <div key={item.step} className="relative">
-                <div className={`bg-${item.color}-50 rounded-2xl p-8 border border-${item.color}-100`}>
-                  <div className={`w-14 h-14 bg-${item.color}-600 rounded-xl flex items-center justify-center mb-6`}>
-                    <item.icon size={28} className="text-white" />
+                <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm text-center hover:shadow-md transition-shadow">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+                    <item.icon size={20} className="text-blue-600" />
                   </div>
-                  <div className="text-sm font-medium text-gray-500 mb-2">步骤 {item.step}</div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">{item.title}</h3>
-                  <p className="text-gray-600 leading-relaxed">{item.description}</p>
+                  <div className="text-xs font-medium text-gray-400 mb-1">{item.step}</div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">{item.title}</h3>
+                  <p className="text-xs text-gray-500">{item.desc}</p>
                 </div>
-                {item.step < 3 && (
-                  <div className="hidden md:block absolute top-1/2 -right-6 transform -translate-y-1/2">
-                    <ArrowRight size={24} className="text-gray-300" />
+                {i < 4 && (
+                  <div className="hidden md:block absolute top-1/2 -right-3 transform -translate-y-1/2 z-10">
+                    <ArrowRight size={16} className="text-gray-300" />
                   </div>
                 )}
               </div>
@@ -200,90 +183,4 @@ export default function Home() {
   );
 }
 
-function DemoShowcase() {
-  return (
-    <div className="relative">
-      {/* Before/After comparison */}
-      <div className="bg-white rounded-2xl shadow-2xl shadow-gray-200/50 overflow-hidden border border-gray-100">
-        {/* Template (Before) */}
-        <div className="p-6 border-b border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-3 h-3 rounded-full bg-red-400" />
-            <div className="w-3 h-3 rounded-full bg-yellow-400" />
-            <div className="w-3 h-3 rounded-full bg-green-400" />
-            <span className="ml-2 text-sm text-gray-500">参考模板</span>
-          </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <div className="flex gap-4">
-              {/* Color palette preview */}
-              <div className="flex gap-1">
-                {['#1a73e8', '#34a853', '#fbbc04', '#ea4335'].map((color, i) => (
-                  <div
-                    key={i}
-                    className="w-8 h-8 rounded"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-              {/* Typography preview */}
-              <div className="flex-1">
-                <div className="text-lg font-bold text-gray-800">标题字体 Arial</div>
-                <div className="text-sm text-gray-500">正文 Helvetica 18pt</div>
-              </div>
-            </div>
-            <div className="mt-3 flex gap-2">
-              <div className="flex-1 h-8 bg-gray-100 rounded" />
-              <div className="flex-1 h-8 bg-gray-100 rounded" />
-            </div>
-          </div>
-        </div>
-
-        {/* Arrow */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-3 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-white text-sm font-medium">
-            <Sparkles size={16} />
-            <span>AI 分析风格 DNA</span>
-          </div>
-        </div>
-
-        {/* Generated (After) */}
-        <div className="p-6 bg-gradient-to-br from-slate-50 to-blue-50">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-sm text-gray-500">生成结果</span>
-            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-medium rounded">
-              87% 置信度
-            </span>
-          </div>
-          <div className="bg-white rounded-lg p-4 border-2 border-blue-200 shadow-lg">
-            <div className="flex gap-4">
-              {/* Same color palette */}
-              <div className="flex gap-1">
-                {['#1a73e8', '#34a853', '#fbbc04', '#ea4335'].map((color, i) => (
-                  <div
-                    key={i}
-                    className="w-8 h-8 rounded"
-                    style={{ backgroundColor: color }}
-                  />
-                ))}
-              </div>
-              {/* Typography preview */}
-              <div className="flex-1">
-                <div className="text-lg font-bold text-gray-800">新标题 保持一致</div>
-                <div className="text-sm text-gray-500">新内容 相同排版</div>
-              </div>
-            </div>
-            <div className="mt-3 flex gap-2">
-              <div className="flex-1 h-8 bg-blue-50 rounded border border-blue-100" />
-              <div className="flex-1 h-8 bg-blue-50 rounded border border-blue-100" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Floating label */}
-      <div className="absolute -bottom-4 -right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
-        <span className="text-sm font-medium">风格完美继承</span>
-      </div>
-    </div>
-  );
-}
+// DemoShowcase 已移除 — 首页保持简洁

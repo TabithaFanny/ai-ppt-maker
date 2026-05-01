@@ -5,6 +5,8 @@ import { useStore } from '@/lib/store';
 import { UserInput, ScenarioType, AudienceType, VisualPreference, PageRecommendation } from '@/types';
 import { Plus, X, Sparkles, ArrowRight, ArrowLeft } from 'lucide-react';
 
+// ... 场景/受众/偏好常量定义 (保持不变) ...
+
 const SCENARIOS: { value: ScenarioType; label: string; description: string }[] = [
   { value: 'course', label: '课程展示', description: '教学课件、学术报告' },
   { value: 'defense', label: '项目答辩', description: '毕业答辩、比赛路演' },
@@ -94,6 +96,24 @@ export default function EnhancedRequirementsForm() {
     const newPoints = [...formData.keyPoints];
     newPoints[index] = value;
     setFormData({ ...formData, keyPoints: newPoints });
+  };
+
+  /** 根据表单数据构建 AI 生图的 Prompt 预览 */
+  const buildAIPrompt = (data: typeof formData): string => {
+    const parts: string[] = [];
+    if (data.topic) parts.push(`主题：${data.topic}`);
+    if (data.description) parts.push(`描述：${data.description}`);
+    const scenarioLabel = SCENARIOS.find(s => s.value === data.scenario)?.label;
+    const audienceLabel = AUDIENCES.find(a => a.value === data.audience)?.label;
+    if (scenarioLabel) parts.push(`场景：${scenarioLabel}`);
+    if (audienceLabel) parts.push(`受众：${audienceLabel}`);
+    const keys = data.keyPoints.filter(k => k.trim());
+    if (keys.length > 0) parts.push(`要点：${keys.join('、')}`);
+    parts.push(`页数：${data.pageCount} 页`);
+    const vpLabel = VISUAL_PREFERENCES.find(v => v.value === data.visualPreference)?.label;
+    if (vpLabel) parts.push(`风格偏好：${vpLabel}`);
+    if (data.specialRequirements) parts.push(`特殊要求：${data.specialRequirements}`);
+    return `【需求概要】\n${parts.join('\n')}`;
   };
 
   const validate = () => {
@@ -350,6 +370,20 @@ export default function EnhancedRequirementsForm() {
           className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none"
         />
       </section>
+
+      {/* AI Prompt 预览 */}
+      {formData.topic && (
+        <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles size={16} className="text-indigo-600" />
+            <span className="text-sm font-semibold text-gray-800">AI 理解你的需求后将生成：</span>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-blue-100 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono">
+            {buildAIPrompt(formData)}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">修改上方选项即可实时更新预览，你也可以直接在 Prompt 中润色</p>
+        </section>
+      )}
 
       {/* Navigation */}
       <div className="flex gap-4 pt-4">

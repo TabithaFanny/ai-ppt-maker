@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useRef, TouchEvent } from 'react';
+import { useState, useRef, TouchEvent, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { ChevronLeft, ChevronRight, Download, Share2, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Share2, Maximize2, Minimize2, RefreshCw, X, Image } from 'lucide-react';
 import pptxgen from 'pptxgenjs';
 import SlidePreview from './SlidePreview';
 import { buildRenderSpec, getSlideBackground } from '@/lib/render-spec';
 import { autoFixPPTJson } from '@/lib/auto-fixer';
 import { exportRenderSpecToPPTX } from '@/lib/export-pptx';
+import { generateImage } from '@/lib/gpt-image';
 import type { StyleKit } from '@/types';
 
 export default function GenerateStep() {
@@ -16,6 +17,14 @@ export default function GenerateStep() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // 单张重生成状态
+  const [slideImages, setSlideImages] = useState<Record<number, string>>({});
+  const [regeneratingPage, setRegeneratingPage] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [editPrompt, setEditPrompt] = useState('');
+  const [modalPageIndex, setModalPageIndex] = useState<number>(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const touchStartX = useRef<number>(0);
   const touchEndX = useRef<number>(0);
 
@@ -52,6 +61,96 @@ export default function GenerateStep() {
     }
   };
 
+  /** 构建单页生图 Prompt */
+  const buildSlidePrompt = (slideIndex: number): string => {
+    const slide = slides[slideIndex];
+    if (!slide) return '';
+
+    const styleConfig = currentProject?.styleConfig;
+    const styleDesc = styleConfig?.overallStyle || 'business';
+    const primaryColor = styleConfig?.palette?.primary || '#1a73e8';
+
+    // Slide.title 是标题，slide.content 是 ContentBlock[]
+    const title = slide.title || `第${slideIndex + 1}页`;
+    const content = slide.content
+      ?.slice(0, 3)
+      ?.map((block) => block.content)
+      ?.filter(Boolean)
+      ?.join('，') || '';
+
+    const role = slide.layout || 'content';
+    const roleTemplate: Record<string, string> = {
+      title: '极简商务风封面，渐变背景，居中大标题，无装饰图',
+      content: '简洁内容页，白色为主，左侧标题区，右侧内容，无背景图',
+      image: '图片展示页，主图突出，图文并茂',
+      chart: '数据展示页，图表区清晰分割，圆角卡片承载数据',
+      quote: '引用页，大字引文居中，小字出处',
+    };
+
+    return `${roleTemplate[role] || roleTemplate.content}\n主题：${title}${content ? '，' + content : ''}\n主色调：${primaryColor}\n风格：${styleDesc}`;
+  };
+
+  /** 打开重生成弹窗 */
+  const openRegenModal = (pageIndex: number) => {
+    setModalPageIndex(pageIndex);
+    setEditPrompt(buildSlidePrompt(pageIndex));
+    setPreviewUrl(slideImages[pageIndex] || null);
+    setShowModal(true);
+  };
+
+  /** 执行单页重生成 */
+  const handleRegenerate = async () => {
+    if (!editPrompt.trim()) return;
+
+    setIsRegenerating(true);
+    try {
+      const result = await generateImage({
+        prompt: editPrompt,
+        size: '1792x1024',
+      });
+
+      if (result.success && result.imageUrl) {
+        setSlideImages((prev) => ({ ...prev, [modalPageIndex]: result.imageUrl! }));
+        setPreviewUrl(result.imageUrl);
+        const { useToast } = await import('@/lib/toast');
+        useToast.getState().show('success', '图片已更新');
+      } else {
+        const { useToast } = await import('@/lib/toast');
+        useToast.getState().show('error', result.error || '生成失败');
+      }
+    } catch (error) {
+      console.error('重生成失败:', error);
+      const { useToast } = await import('@/lib/toast');
+      useToast.getState().show('error', '生成失败，请重试');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  /** 批量生成所有页的 AI 预览图 */
+  const generateAllImages = async () => {
+    setIsGenerating(true);
+    setProgress({ current: 0, total: slides.length });
+    let successCount = 0;
+    for (let i = 0; i < slides.length; i++) {
+      setProgress({ current: i + 1, total: slides.length });
+      try {
+        const prompt = buildSlidePrompt(i);
+        const result = await generateImage({ prompt, size: '1792x1024' });
+        if (result.success && result.imageUrl) {
+          setSlideImages(prev => ({ ...prev, [i]: result.imageUrl! }));
+          successCount++;
+        }
+      } catch (e) {
+        console.error(`第 ${i + 1} 页生成失败:`, e);
+      }
+    }
+    setIsGenerating(false);
+    setProgress({ current: 0, total: 0 });
+    const { useToast } = await import('@/lib/toast');
+    useToast.getState().show('success', `生成完成：${successCount}/${slides.length} 页`);
+  };
+
   const exportToPPTX = async () => {
     if (!currentProject?.pptJson) return;
 
@@ -59,7 +158,6 @@ export default function GenerateStep() {
     const { pptJson } = currentProject;
 
     try {
-      // 1. Auto-fix 可修复问题
       const renderSpecForCheck = buildRenderSpec(
         pptJson,
         (currentStyleKit || currentProject.styleConfig) as StyleKit
@@ -69,11 +167,6 @@ export default function GenerateStep() {
         renderSpecForCheck.issues
       );
 
-      if (fixResult.fixed > 0) {
-        console.log(`Auto-fixed ${fixResult.fixed} issues`);
-      }
-
-      // 2. 获取 DeckPlan 的 slideRole 映射
       const slideRoles = new Map<string, string>();
       if (currentProject.deckPlan) {
         for (const plan of currentProject.deckPlan.slidePlans) {
@@ -81,7 +174,6 @@ export default function GenerateStep() {
         }
       }
 
-      // 3. 构建 RenderSpec（使用修复后的 PPTJson）
       const styleSource = currentStyleKit || currentProject.styleConfig;
       if (!styleSource) {
         const { useToast } = await import('@/lib/toast');
@@ -95,7 +187,6 @@ export default function GenerateStep() {
         slideRoles as Map<string, string> as any
       );
 
-      // 4. 导出
       await exportRenderSpecToPPTX(renderSpec, {
         fileName: `${pptJson.metadata.title}.pptx`,
         onProgress: (current, total) => setProgress({ current, total }),
@@ -116,7 +207,6 @@ export default function GenerateStep() {
 
   const exportJSON = () => {
     if (!currentProject?.pptJson) return;
-
     const json = JSON.stringify(currentProject.pptJson, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -148,6 +238,8 @@ export default function GenerateStep() {
   }
 
   const currentSlide = slides[currentIndex];
+  // 该页如果有 AI 图片优先显示
+  const activeImageUrl = slideImages[currentIndex] || null;
 
   return (
     <div className={`h-screen flex flex-col ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
@@ -155,6 +247,14 @@ export default function GenerateStep() {
       <div className={`border-b p-4 flex items-center justify-between ${isFullscreen ? 'hidden' : ''}`}>
         <h2 className="text-xl font-bold">预览与导出</h2>
         <div className="hidden md:flex gap-2">
+          <button
+            onClick={generateAllImages}
+            disabled={isGenerating}
+            className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            <Image size={20} />
+            {isGenerating ? `AI 生图中 ${progress.current}/${progress.total}` : 'AI 批量生图'}
+          </button>
           <button
             onClick={exportJSON}
             className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50"
@@ -187,19 +287,48 @@ export default function GenerateStep() {
         </button>
       </div>
 
-      {/* Slide preview */}
+      {/* Slide preview area */}
       <div
-        className="flex-1 flex items-center justify-center bg-gray-100 p-4 md:p-8"
+        className="flex-1 flex items-center justify-center bg-gray-100 p-4 md:p-8 relative"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <SlidePreview
-          slide={currentSlide}
-          styleKit={currentStyleKit}
-          styleConfig={currentProject?.styleConfig}
-          className="max-w-4xl w-full shadow-lg"
-        />
+        {/* AI 生成图片优先显示 */}
+        {activeImageUrl ? (
+          <div className="relative max-w-4xl w-full">
+            <img
+              src={activeImageUrl}
+              alt={`第${currentIndex + 1}页 AI 生成图`}
+              className="w-full rounded-lg shadow-lg"
+            />
+            <button
+              onClick={() => openRegenModal(currentIndex)}
+              className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 bg-white/90 backdrop-blur rounded-full text-sm font-medium text-gray-700 hover:bg-white shadow-md border transition-all"
+            >
+              <RefreshCw size={14} />
+              重生成
+            </button>
+          </div>
+        ) : (
+          <SlidePreview
+            slide={currentSlide}
+            styleKit={currentStyleKit}
+            styleConfig={currentProject?.styleConfig}
+            className="max-w-4xl w-full shadow-lg"
+          />
+        )}
+
+        {/* 左下角：重生成按钮（当没有AI图片时显示） */}
+        {!activeImageUrl && (
+          <button
+            onClick={() => openRegenModal(currentIndex)}
+            className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 shadow-md transition-all"
+          >
+            <Image size={14} />
+            AI 生成预览图
+          </button>
+        )}
       </div>
 
       {/* Bottom navigation */}
@@ -212,29 +341,26 @@ export default function GenerateStep() {
           <ChevronLeft size={20} />
           <span className="hidden sm:inline">上一页</span>
         </button>
-        <div className="flex items-center gap-4">
+
+        <div className="flex flex-col items-center gap-1">
           <span className="text-gray-600 text-sm">
             {currentIndex + 1} / {slides.length}
           </span>
-          <div className="md:hidden flex gap-2">
-            <button
-              onClick={prevSlide}
-              disabled={currentIndex === 0}
-              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center border rounded hover:bg-gray-50 disabled:opacity-50"
-              aria-label="上一页"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <button
-              onClick={nextSlide}
-              disabled={currentIndex === slides.length - 1}
-              className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center border rounded hover:bg-gray-50 disabled:opacity-50"
-              aria-label="下一页"
-            >
-              <ChevronRight size={20} />
-            </button>
+          {/* 页码指示器（可点击切换） */}
+          <div className="flex gap-1 flex-wrap max-w-xs justify-center">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentIndex(i)}
+                className={`w-2 h-2 rounded-full transition-all ${
+                  i === currentIndex ? 'bg-blue-600 w-4' : slideImages[i] ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+                aria-label={`第${i + 1}页`}
+              />
+            ))}
           </div>
         </div>
+
         <button
           onClick={nextSlide}
           disabled={currentIndex === slides.length - 1}
@@ -244,6 +370,74 @@ export default function GenerateStep() {
           <ChevronRight size={20} />
         </button>
       </div>
+
+      {/* 重生成弹窗 */}
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="text-lg font-bold">重生成第 {modalPageIndex + 1} 页</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="p-2 rounded-full hover:bg-gray-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 预览图 */}
+            {previewUrl && (
+              <div className="px-6 pt-4">
+                <img
+                  src={previewUrl}
+                  alt="当前预览"
+                  className="w-full rounded-lg border"
+                />
+              </div>
+            )}
+
+            {/* Prompt 编辑 */}
+            <div className="px-6 py-4 space-y-3">
+              <label className="text-sm font-medium text-gray-700">生图 Prompt（可修改）</label>
+              <textarea
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                rows={5}
+                className="w-full p-3 border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="描述这页应该呈现的样子..."
+              />
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="px-6 py-4 flex justify-end gap-3 border-t bg-gray-50">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 border rounded hover:bg-gray-100 text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRegenerate}
+                disabled={isRegenerating || !editPrompt.trim()}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-sm"
+              >
+                {isRegenerating ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={16} />
+                    重新生成
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
