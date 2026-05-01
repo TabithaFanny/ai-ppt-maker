@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { AnalysisJob, StyleKit, StyleDNA, SlideImage } from '@/types';
 import { StyleKitReport } from '@/components/style-kit';
-import { Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Sparkles, Loader2, AlertCircle, FileText, Palette, Type, Check, ChevronRight } from 'lucide-react';
 import { analysisJobService } from '@/lib/db';
 
 type WizardStep = 'extracting' | 'extracting-dna' | 'distilling' | 'complete' | 'error';
@@ -62,6 +62,7 @@ export default function StyleKitWizard({
   const [progress, setProgress] = useState({ current: 0, total: 0, message: '' });
   const [error, setError] = useState<string | null>(null);
   const [styleKit, setStyleKit] = useState<StyleKit | null>(null);
+  const [extractMeta, setExtractMeta] = useState<{ hadFailures?: boolean; wasSampled?: boolean; processedSlides?: number }>({});
   const [slideImages, setSlideImages] = useState<ExtractedSlide[]>([]);
   const [jobId, setJobId] = useState<string | null>(null);
 
@@ -218,7 +219,11 @@ export default function StyleKitWizard({
         });
 
         if (dnaResponse.ok) {
-          const data: ExtractResult = await dnaResponse.json();
+          const data: any = await dnaResponse.json();
+          // 保存 extract 元信息
+          if (data.hadFailures || data.wasSampled || data.processedSlides) {
+            setExtractMeta({ hadFailures: data.hadFailures, wasSampled: data.wasSampled, processedSlides: data.processedSlides });
+          }
           if (data.styleDNAResults && data.styleDNAResults.length > 0) {
             styleDNAResults.push(data.styleDNAResults[0]);
             await persistJobSnapshot(currentJobId, {
@@ -331,6 +336,9 @@ export default function StyleKitWizard({
           onConfirm={() => onComplete?.(styleKit)}
           onCancel={onCancel}
           onRetry={handleRetry}
+          hadFailures={extractMeta.hadFailures}
+          wasSampled={extractMeta.wasSampled}
+          processedSlides={extractMeta.processedSlides}
         />
       </div>
     );
@@ -346,39 +354,59 @@ export default function StyleKitWizard({
               <Sparkles className="text-white" size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">StyleKit 风格分析</h2>
-              <p className="text-indigo-100 text-sm">从 PPT 模板中提取视觉风格 DNA</p>
+              <h2 className="text-xl font-bold text-white">AI 正在提取参考 PPT 的视觉风格 DNA</h2>
+              <p className="text-indigo-100 text-sm">从 {fileName || fileId} 中提取设计语言</p>
             </div>
           </div>
         </div>
 
         {/* Progress */}
         <div className="p-6">
-          {step === 'extracting' && (
-            <StepView
-              icon={<Loader2 className="animate-spin" size={24} />}
-              title="提取幻灯片"
-              message={progress.message}
-              progress={progress}
+          <div className="space-y-4">
+            <ProgressStep
+              icon={<FileText size={18} />}
+              title="读取页面布局"
+              description="正在分析页面结构与排版"
+              active={step === 'extracting'}
+              done={step !== 'extracting' && progress.current > 0}
             />
-          )}
+            <ProgressArrow />
+            <ProgressStep
+              icon={<Palette size={18} />}
+              title="提取配色方案"
+              description="正在识别主色与辅助色"
+              active={step === 'extracting-dna'}
+              done={step === 'distilling' || step === 'complete'}
+            />
+            <ProgressArrow />
+            <ProgressStep
+              icon={<Type size={18} />}
+              title="识别字体层级"
+              description="正在分析字体与层级关系"
+              active={false}
+              done={step === 'distilling' || step === 'complete'}
+            />
+            <ProgressArrow />
+            <ProgressStep
+              icon={<Sparkles size={18} />}
+              title="总结风格规则"
+              description="正在整理视觉风格关键词"
+              active={step === 'distilling'}
+              done={step === 'complete'}
+            />
+          </div>
 
-          {step === 'extracting-dna' && (
-            <StepView
-              icon={<Loader2 className="animate-spin" size={24} />}
-              title="分析视觉风格"
-              message={progress.message}
-              progress={progress}
-            />
-          )}
-
-          {step === 'distilling' && (
-            <StepView
-              icon={<Loader2 className="animate-spin" size={24} />}
-              title="提炼风格包"
-              message="正在综合分析结果，生成 StyleKit..."
-              progress={progress}
-            />
+          {/* Progress bar */}
+          {step !== 'complete' && step !== 'error' && (
+            <div className="mt-6">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
+                <div
+                  className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: `${progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 10}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 text-center">{progress.message}</p>
+            </div>
           )}
 
           {step === 'error' && (
@@ -408,35 +436,27 @@ export default function StyleKitWizard({
   );
 }
 
-function StepView({
-  icon,
-  title,
-  message,
-  progress,
-}: {
+function ProgressStep({ icon, title, description, active, done }: {
   icon: React.ReactNode;
   title: string;
-  message: string;
-  progress: { current: number; total: number; message: string };
+  description: string;
+  active: boolean;
+  done: boolean;
 }) {
-  const percentage = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-
   return (
-    <div className="text-center py-8">
-      <div className="w-16 h-16 mx-auto mb-4 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
-        {icon}
+    <div className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${active ? 'bg-indigo-50 border border-indigo-100' : done ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'}`}>
+      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${done ? 'bg-green-500 text-white' : active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+        {done ? <Check size={18} /> : icon}
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600 mb-6">{message}</p>
-
-      {/* Progress bar */}
-      <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
-        <div
-          className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
-          style={{ width: `${percentage}%` }}
-        />
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium ${done ? 'text-green-800' : active ? 'text-indigo-900' : 'text-gray-600'}`}>{title}</p>
+        <p className="text-xs text-gray-500">{active ? description : ''}</p>
       </div>
-      <p className="text-sm text-gray-500">{percentage}%</p>
+      {active && <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin flex-shrink-0" />}
     </div>
   );
+}
+
+function ProgressArrow() {
+  return <div className="flex justify-center"><ChevronRight size={16} className="text-gray-300 rotate-90" /></div>;
 }

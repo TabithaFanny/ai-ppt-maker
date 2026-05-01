@@ -123,16 +123,16 @@ function mockSlideBlocks(title: string, conclusion: string, idx: number) {
 }
 
 const slideMeta = [
-  { layout: 'title', title: '社区治理 AI 平台解决方案', conclusion: '以 AI 技术驱动社区治理数字化转型' },
-  { layout: 'content', title: '当前社区治理痛点', conclusion: '传统管理模式难以应对日益复杂的社会治理需求' },
-  { layout: 'content', title: 'AI 赋能社区治理场景', conclusion: '六大核心场景覆盖社区治理全链路' },
-  { layout: 'image', title: '平台整体架构', conclusion: '四层架构实现数据采集到决策辅助的闭环' },
-  { layout: 'chart', title: '社区服务数据概览', conclusion: '服务需求持续增长，AI 赋能空间巨大' },
-  { layout: 'content', title: '核心技术能力', conclusion: '自然语言处理与知识图谱驱动智能决策' },
-  { layout: 'quote', title: '设计理念', conclusion: '以人为本的智能治理' },
-  { layout: 'chart', title: '预期成果指标', conclusion: '全面提升社区治理效率与居民满意度' },
-  { layout: 'content', title: '实施路径规划', conclusion: '分三期推进，稳步实现全面落地' },
-  { layout: 'title', title: '总结与展望', conclusion: 'AI 技术将为社区治理带来深远变革' },
+  { layout: 'title' as const, title: '社区治理 AI 平台解决方案', conclusion: '以 AI 技术驱动社区治理数字化转型' },
+  { layout: 'content' as const, title: '当前社区治理痛点', conclusion: '传统管理模式难以应对日益复杂的社会治理需求' },
+  { layout: 'content' as const, title: 'AI 赋能社区治理场景', conclusion: '六大核心场景覆盖社区治理全链路' },
+  { layout: 'image' as const, title: '平台整体架构', conclusion: '四层架构实现数据采集到决策辅助的闭环' },
+  { layout: 'chart' as const, title: '社区服务数据概览', conclusion: '服务需求持续增长，AI 赋能空间巨大' },
+  { layout: 'content' as const, title: '核心技术能力', conclusion: '自然语言处理与知识图谱驱动智能决策' },
+  { layout: 'quote' as const, title: '设计理念', conclusion: '以人为本的智能治理' },
+  { layout: 'chart' as const, title: '预期成果指标', conclusion: '全面提升社区治理效率与居民满意度' },
+  { layout: 'content' as const, title: '实施路径规划', conclusion: '分三期推进，稳步实现全面落地' },
+  { layout: 'title' as const, title: '总结与展望', conclusion: 'AI 技术将为社区治理带来深远变革' },
 ];
 
 export const mockPPTJson = {
