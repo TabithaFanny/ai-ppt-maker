@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { deepseekChat, withRetry } from '@/lib/api-client';
+import { deepseekWithFallback, withRetry } from '@/lib/api-client';
 import { validateAIOutput, DistillStyleKitResponseSchema } from '@/lib/schemas';
 import { StyleDNA, LayoutPattern, SlideRole, DEFAULT_SLIDE_ROLE_DEFINITIONS, LayoutType } from '@/types';
 import { ok, fail } from '@/lib/api-response';
@@ -199,7 +199,7 @@ ${styleDNAContext}
 直接输出有效的 JSON，不要添加注释或其他文字。`;
 
     const result = await withRetry(async () => {
-      const response = await deepseekChat([{ role: 'user', content: prompt }]);
+      const response = await deepseekWithFallback([{ role: 'user', content: prompt }]);
       const text = response.content.replace(/```json\n?|\n?```/g, '').trim();
       let parsed: unknown;
       try {

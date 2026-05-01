@@ -21,6 +21,8 @@ export interface ImageGenerationResult {
 
 const API_BASE = 'https://main-new.codesuc.top/v1';
 
+const AI_MOCK = process.env.NEXT_PUBLIC_AI_MOCK === 'true' || process.env.AI_MOCK === 'true';
+
 /**
  * Generate image using GPT-Image-2
  */
@@ -37,6 +39,14 @@ export async function generateImage(
 
   if (!prompt.trim()) {
     return { success: false, error: 'Prompt is required' };
+  }
+
+  // Mock 模式：返回占位图 URL
+  if (AI_MOCK) {
+    return {
+      success: true,
+      imageUrl: `https://placehold.co/${size.replace('x', 'x')}/1e40af/ffffff?text=AI+Mock+Image`,
+    };
   }
 
   const apiKey = process.env.OPENAI_API_KEY || process.env.GPT_IMAGE_API_KEY;
