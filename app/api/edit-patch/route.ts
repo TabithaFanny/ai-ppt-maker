@@ -5,8 +5,9 @@
  * 支持 few-shot 示例 + 失败自动重试
  */
 
-import { chatCompletion } from '@/lib/api-client';
+import { chatCompletion, isMockMode } from '@/lib/api-client';
 import { EditPatchSchema, validateAIOutput } from '@/lib/schemas';
+import { mockEditPatch } from '@/lib/ai-mock-data';
 import { ok, fail } from '@/lib/api-response';
 import type { Slide } from '@/types';
 
@@ -131,6 +132,17 @@ export async function POST(request: Request) {
 
     if (!instruction.trim()) {
       return fail('修改指令不能为空', 400);
+    }
+
+    // AI_MOCK=true 直接返回 mock patch
+    if (isMockMode()) {
+      return ok({
+        ...mockEditPatch,
+        slideId: slide.id,
+        elementId: slide.content[0]?.id || 'mock-element-id',
+        oldValue: slide.title,
+        newValue: `[Mock] ${slide.title}`,
+      });
     }
 
     const slideContext = buildSlideContext(slide);

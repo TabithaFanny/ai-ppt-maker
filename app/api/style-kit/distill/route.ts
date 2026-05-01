@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
-import { deepseekWithFallback, withRetry } from '@/lib/api-client';
+import { deepseekWithFallback, withRetry, isMockMode } from '@/lib/api-client';
 import { validateAIOutput, DistillStyleKitResponseSchema } from '@/lib/schemas';
+import { mockStyleDistillResult } from '@/lib/ai-mock-data';
 import { StyleDNA, LayoutPattern, SlideRole, DEFAULT_SLIDE_ROLE_DEFINITIONS, LayoutType } from '@/types';
 import { ok, fail } from '@/lib/api-response';
 
@@ -197,6 +198,20 @@ ${styleDNAContext}
 \`\`\`
 
 直接输出有效的 JSON，不要添加注释或其他文字。`;
+
+    // AI_MOCK=true 直接返回 mock StyleKit result
+    if (isMockMode()) {
+      return ok({
+        success: true,
+        styleKit: mockStyleDistillResult,
+        analysisSummary: {
+          totalSlides: styleDNAResults.length,
+          mood: mockStyleDistillResult.mood,
+          styleTags: mockStyleDistillResult.styleTags,
+          layoutPatternsFound: mockStyleDistillResult.layoutPatterns.length,
+        },
+      });
+    }
 
     const result = await withRetry(async () => {
       const response = await deepseekWithFallback([{ role: 'user', content: prompt }]);

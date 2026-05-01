@@ -3,6 +3,7 @@ import type { PPTXAnalysis } from './pptx-parser';
 import { resolveStyleConfig } from './style-bridge';
 import { withRetry, chatCompletion, deepseekWithFallback, isMockMode, AIError } from './api-client';
 import { StyleConfigSchema, PPTJsonSchema, DeckPlanSchema, validateAIOutput } from './schemas';
+import { mockPPTJson, mockDeckPlan } from './ai-mock-data';
 
 export { withRetry, chatCompletion, deepseekWithFallback } from './api-client';
 
@@ -113,6 +114,20 @@ ${JSON.stringify(styleConfig, null, 2)}
 
 直接输出描述，不要添加额外说明。`;
 
+  // AI_MOCK=true 直接返回 mock
+  if (isMockMode()) {
+    return `第1页：标题页 - 社区治理 AI 平台解决方案
+第2页：目录
+第3页：项目背景与机遇
+第4页：当前社区治理痛点
+第5页：AI 赋能社区治理场景
+第6页：平台整体架构
+第7页：核心技术能力
+第8页：预期成果指标
+第9页：实施路径规划
+第10页：总结与展望`;
+  }
+
   return withRetry(async () => {
     const response = await deepseekWithFallback([{ role: 'user', content: prompt }]);
     return response.content;
@@ -180,6 +195,9 @@ ${JSON.stringify(resolvedStyleConfig, null, 2)}
 - layout 和 type 必须为枚举值之一
 
 直接输出有效的 JSON，不要添加注释或其他文字。`;
+
+  // AI_MOCK=true 直接返回 mock PPTJson
+  if (isMockMode()) return mockPPTJson;
 
   return withRetry(async () => {
     const response = await deepseekWithFallback([{ role: 'user', content: prompt }]);
@@ -273,6 +291,9 @@ ${layoutPatterns || '- hero, two-column, grid, centered (默认)'}
 \`\`\`
 
 直接输出有效的 JSON，不要添加注释或其他文字。`;
+
+  // AI_MOCK=true 直接返回 mock DeckPlan
+  if (isMockMode()) return mockDeckPlan;
 
   return withRetry(async () => {
     const response = await deepseekWithFallback([{ role: 'user', content: prompt }]);
