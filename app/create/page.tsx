@@ -1,76 +1,169 @@
 'use client';
 
-import { useEffect, useState, lazy, Suspense } from 'react';
+import { useEffect, useState, lazy, Suspense, useCallback } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { projectService } from '@/lib/db';
+import { isMockMode } from '@/lib/api-client';
 import EnhancedRequirementsForm from '@/components/EnhancedRequirementsForm';
 import { StyleKitWizard } from '@/components/style-kit';
 import { StyleKit } from '@/types';
 import { styleKitToStyleConfig } from '@/lib/style-bridge';
+import { Check, Upload, FileText, Sparkles } from 'lucide-react';
 
 const EditStep = lazy(() => import('@/components/EditStep'));
 const GenerateStep = lazy(() => import('@/components/GenerateStep'));
 
+// ====== Step 常量 ======
+const STEPS = [
+  { num: 1, label: '上传参考 PPT' },
+  { num: 2, label: '分析风格' },
+  { num: 3, label: '输入需求' },
+  { num: 4, label: '编辑内容' },
+  { num: 5, label: '导出' },
+];
+
+// ====== 状态文案 ======
+function getStepStatus(step: number, currentStep: number, store: any): { status: 'done' | 'current' | 'pending' | 'disabled'; statusText: string } {
+  const { currentProject } = store;
+  const hasUploaded = !!currentProject?.templateFileId;
+  const hasStyle = !!store.currentStyleKit || !!currentProject?.styleKitId;
+  const hasSlides = !!(currentProject?.pptJson?.slides && currentProject.pptJson.slides.length > 0);
+  const slideIndex = store.selectedSlideIndex || 1;
+
+  // 前置条件
+  const canAccess: Record<number, boolean> = {
+    1: true,
+    2: hasUploaded,
+    3: hasUploaded && hasStyle,
+    4: hasSlides,
+    5: hasSlides,
+  };
+
+  const isDone: Record<number, boolean> = {
+    1: hasUploaded,
+    2: hasStyle,
+    3: hasSlides,
+    4: hasSlides,
+    5: false,
+  };
+
+  const statusTexts: Record<number, Record<string, string>> = {
+    1: { pending: '等待上传参考 PPT', current: '正在上传文件', done: '已上传 1 个文件' },
+    2: { pending: '待分析风格', current: '正在提取视觉风格', done: '已识别 12 种元素' },
+    3: { pending: '待输入需求', current: '正在填写需求', done: '已生成内容框架' },
+    4: { pending: '待编辑内容', current: `正在编辑第 ${slideIndex} 页`, done: '内容已编辑' },
+    5: { pending: '待导出 PPT', current: '准备导出 PPT', done: '已生成导出文件' },
+  };
+
+  if (step === currentStep) {
+    return { status: 'current', statusText: statusTexts[step].current };
+  }
+  if (isDone[step]) {
+    return { status: 'done', statusText: statusTexts[step].done };
+  }
+  if (canAccess[step]) {
+    return { status: 'pending', statusText: statusTexts[step].pending };
+  }
+  return { status: 'disabled', statusText: statusTexts[step].pending };
+}
+
 export default function CreatePage() {
-  const { currentProject, currentStep, setCurrentProject } = useStore();
+  const router = useRouter();
+  const store = useStore();
+  const { currentProject, currentStep, setCurrentProject, setCurrentStep } = store;
 
   useEffect(() => {
-    // 初始化项目
     const initProject = async () => {
       if (!currentProject) {
-        const project = await projectService.create({
-          title: '新项目',
-          status: 'draft',
-        });
+        const project = await projectService.create({ title: '新项目', status: 'draft' });
         setCurrentProject(project);
       }
     };
     initProject();
   }, [currentProject, setCurrentProject]);
 
+  const handleStepClick = useCallback((stepNum: number) => {
+    if (stepNum === currentStep) return;
+    const { status } = getStepStatus(stepNum, currentStep, store);
+    if (status === 'done') {
+      setCurrentStep(stepNum);
+    }
+  }, [currentStep, store, setCurrentStep]);
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f8fafc]">
+      {/* 全局导航 */}
+      <header className="bg-white border-b border-[#e2e8f0] sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#1e40af] rounded-lg flex items-center justify-center">
+              <Sparkles size={16} className="text-white" />
+            </div>
+            <span className="text-base font-semibold text-[#0f172a]">AI PPT Generator</span>
+          </div>
+          <nav className="flex items-center gap-8">
+            <Link href="/" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">首页</Link>
+            <Link href="/create" className="text-sm text-[#1e40af] border-b-2 border-[#1e40af] pb-1">创建</Link>
+            <Link href="/projects" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">项目</Link>
+          </nav>
+        </div>
+      </header>
+
       {/* 步骤指示器 */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {[
-              { num: 1, label: '上传模板' },
-              { num: 2, label: '分析风格' },
-              { num: 3, label: '输入需求' },
-              { num: 4, label: '编辑内容' },
-              { num: 5, label: '生成预览' },
-            ].map((step, index) => (
-              <div key={step.num} className="flex items-center">
-                <div
-                  className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                    currentStep >= step.num
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  {step.num}
+      <div className="bg-white border-b border-[#e2e8f0]">
+        <div className="max-w-7xl mx-auto px-8 py-5">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            {STEPS.map((step, index) => {
+              const { status, statusText } = getStepStatus(step.num, currentStep, store);
+              const isClickable = status === 'done' || status === 'current';
+              return (
+                <div key={step.num} className="flex items-center flex-1">
+                  <button
+                    onClick={() => handleStepClick(step.num)}
+                    disabled={!isClickable}
+                    className="flex flex-col items-center gap-1 group"
+                  >
+                    {/* 圆点 */}
+                    <div className={`
+                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all
+                      ${status === 'done' ? 'bg-[#1e40af] text-white shadow-sm' : ''}
+                      ${status === 'current' ? 'bg-[#1e40af] text-white ring-4 ring-[#1e40af]/20' : ''}
+                      ${status === 'pending' ? 'bg-gray-200 text-gray-500' : ''}
+                      ${status === 'disabled' ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : ''}
+                    `}>
+                      {status === 'done' ? <Check size={16} /> : step.num}
+                    </div>
+                    <span className={`text-xs font-medium ${status === 'disabled' ? 'text-gray-300' : status === 'current' ? 'text-[#1e40af]' : 'text-gray-500'}`}>
+                      {step.label}
+                    </span>
+                    <span className={`text-[10px] leading-tight ${status === 'disabled' ? 'text-gray-200' : 'text-gray-400'}`}>
+                      {statusText}
+                    </span>
+                  </button>
+                  {index < 4 && (
+                    <div className={`flex-1 h-[1px] mx-3 mt-[-20px] ${status === 'done' ? 'bg-[#1e40af]' : 'bg-gray-200'}`} />
+                  )}
                 </div>
-                <span className="ml-2 text-sm font-medium">{step.label}</span>
-                {index < 4 && <div className="w-12 h-0.5 bg-gray-300 mx-4" />}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
 
       {/* 步骤内容 */}
       <div className="max-w-7xl mx-auto">
-        {currentStep === 1 && <FileUploadStep />}
-        {currentStep === 2 && <AnalyzeStep />}
+        {currentStep === 1 && <FileUploadStep store={store} />}
+        {currentStep === 2 && <AnalyzeStep store={store} />}
         {currentStep === 3 && <EnhancedRequirementsForm />}
         {currentStep === 4 && (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<LoadingFallback text="加载编辑器..." />}>
             <EditStep />
           </Suspense>
         )}
         {currentStep === 5 && (
-          <Suspense fallback={<LoadingFallback />}>
+          <Suspense fallback={<LoadingFallback text="加载导出页..." />}>
             <GenerateStep />
           </Suspense>
         )}
@@ -79,90 +172,144 @@ export default function CreatePage() {
   );
 }
 
-function FileUploadStep() {
-  const { setCurrentStep, setCurrentProject, currentProject } = useStore();
+// ====== FileUploadStep ======
+function FileUploadStep({ store }: { store: any }) {
+  const { setCurrentStep, setCurrentProject, currentProject } = store;
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploading(true);
+    setError(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
+      const response = await fetch('/api/upload', { method: 'POST', body: formData });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || '上传失败');
-
       if (currentProject) {
-        await projectService.update(currentProject.id, {
-          templateFileId: data.fileId,
-        });
+        await projectService.update(currentProject.id, { templateFileId: data.fileId });
         setCurrentProject({ ...currentProject, templateFileId: data.fileId });
       }
-
       setCurrentStep(2);
-    } catch (error) {
-      console.error('上传失败:', error);
-      const message = error instanceof Error ? error.message : '上传失败，请重试';
-      const { useToast } = await import('@/lib/toast');
-      useToast.getState().show('error', message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '上传失败，请重试');
+    } finally {
+      setUploading(false);
+      setUploadProgress(100);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '上传失败');
+      if (currentProject) {
+        await projectService.update(currentProject.id, { templateFileId: data.fileId });
+        setCurrentProject({ ...currentProject, templateFileId: data.fileId });
+      }
+      setCurrentStep(2);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '上传失败，请重试');
     } finally {
       setUploading(false);
     }
   };
 
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[500px]">
+        <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-10 text-center max-w-lg">
+          <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <FileText size={28} className="text-red-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-[#0f172a] mb-2">上传失败</h3>
+          <p className="text-sm text-[#64748b] mb-6">{error}</p>
+          <button onClick={() => setError(null)} className="px-6 py-2.5 bg-[#1e40af] text-white text-sm font-medium rounded-xl hover:bg-[#1e40af]/90">重新上传</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-center min-h-[600px]">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold mb-4">上传 PPT 模板</h2>
-        <p className="text-gray-600 mb-8">支持 PDF、PPT、PPTX 格式，最大 50MB</p>
-        <label className="inline-block px-8 py-4 bg-blue-600 text-white rounded-lg cursor-pointer hover:bg-blue-700">
-          {uploading ? '上传中...' : '选择文件'}
-          <input
-            type="file"
-            accept=".pdf,.ppt,.pptx"
-            onChange={handleUpload}
-            disabled={uploading}
-            className="hidden"
-          />
-        </label>
+    <div className="flex items-center justify-center min-h-[500px] px-4 py-12">
+      <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-10 w-full max-w-2xl">
+        <div className="max-w-md mx-auto">
+          {/* 标题 */}
+          <h2 className="text-xl font-bold text-[#0f172a] mb-2">第 01 步 · 上传参考 PPT</h2>
+          <p className="text-sm text-[#64748b] mb-8">上传你的参考 PPT，AI 将学习其视觉风格与结构逻辑，为后续生成提供基础。</p>
+
+          {/* 上传区 */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            className={`border-2 border-dashed rounded-2xl p-10 text-center mb-6 transition-colors ${uploading ? 'border-[#1e40af] bg-[#1e40af]/5' : 'border-[#e2e8f0] hover:border-[#1e40af]'}`}
+          >
+            {uploading ? (
+              <div className="space-y-4">
+                <div className="w-12 h-12 mx-auto rounded-full border-4 border-[#e2e8f0] border-t-[#1e40af] animate-spin" />
+                <p className="text-sm font-medium text-[#0f172a]">正在上传...</p>
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div className="bg-[#1e40af] h-full rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              </div>
+            ) : (
+              <>
+                <Upload size={40} className="mx-auto text-[#64748b] mb-4" />
+                <p className="text-base font-medium text-[#0f172a] mb-2">将参考 PPT 拖拽到这里</p>
+                <p className="text-sm text-[#64748b] mb-6">支持 .pptx / .pdf / Keynote 导出的 PDF</p>
+                <label className="inline-flex items-center gap-2 px-6 py-2.5 bg-[#1e40af] text-white text-sm font-medium rounded-xl cursor-pointer hover:bg-[#1e40af]/90 transition-colors">
+                  <Upload size={16} />
+                  选择文件
+                  <input type="file" accept=".pdf,.ppt,.pptx" onChange={handleUpload} disabled={uploading} className="hidden" />
+                </label>
+              </>
+            )}
+          </div>
+
+          {/* 隐私提示 */}
+          <p className="text-xs text-[#94a3b8] text-center">文件仅用于风格识别与内容生成，不会被用于其他用途。</p>
+        </div>
       </div>
     </div>
   );
 }
 
-function AnalyzeStep() {
-  const { currentProject, setCurrentProject, setCurrentStep, setCurrentStyleKit } = useStore();
+// ====== AnalyzeStep ======
+function AnalyzeStep({ store }: { store: any }) {
+  const { currentProject, setCurrentProject, setCurrentStep, setCurrentStyleKit } = store;
 
   const handleStyleKitComplete = async (styleKit: StyleKit) => {
     setCurrentStyleKit(styleKit);
     if (currentProject) {
-      const updates = {
-        styleKitId: styleKit.id,
-        styleKitVersion: 1,
-        styleKitSource: 'uploaded-template' as const,
-        styleConfig: styleKitToStyleConfig(styleKit),
-      };
+      const updates = { styleKitId: styleKit.id, styleKitVersion: 1, styleKitSource: 'uploaded-template' as const, styleConfig: styleKitToStyleConfig(styleKit) };
       await projectService.update(currentProject.id, updates);
       setCurrentProject({ ...currentProject, ...updates });
     }
-    // Auto continue to next step after a short delay
-    setTimeout(() => setCurrentStep(3), 1500);
+    setTimeout(() => setCurrentStep(3), 500);
   };
 
-  const handleCancel = () => {
-    setCurrentStep(1);
-  };
+  const handleCancel = () => setCurrentStep(1);
 
   if (!currentProject?.templateFileId) {
-    return <LoadingFallback text="请先上传模板..." />;
+    return (
+      <div className="flex items-center justify-center min-h-[500px]">
+        <LoadingFallback text="请先上传模板..." />
+      </div>
+    );
   }
 
   return (
@@ -177,10 +324,10 @@ function AnalyzeStep() {
 
 function LoadingFallback({ text = '加载中...' }: { text?: string }) {
   return (
-    <div className="flex items-center justify-center min-h-[600px]">
+    <div className="flex items-center justify-center min-h-[500px]">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <p className="text-gray-600">{text}</p>
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#e2e8f0] border-t-[#1e40af] mx-auto mb-4" />
+        <p className="text-sm text-[#64748b]">{text}</p>
       </div>
     </div>
   );

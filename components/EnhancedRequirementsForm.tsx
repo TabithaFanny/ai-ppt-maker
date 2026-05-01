@@ -173,8 +173,8 @@ export default function EnhancedRequirementsForm() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">定义你的 PPT 需求</h2>
-        <p className="text-gray-600">告诉我们你的使用场景和受众，AI 会生成更精准的内容</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">告诉 AI 这份新 PPT 要讲什么</h2>
+        <p className="text-gray-600">填写以下内容，AI 将根据你的需求生成对应结构的内容。</p>
       </div>
 
       {/* Quick Templates */}
@@ -371,13 +371,14 @@ export default function EnhancedRequirementsForm() {
         />
       </section>
 
-      {/* AI Prompt 预览 */}
+      {/* AI 提示词预览 */}
       {formData.topic && (
         <section className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-100">
           <div className="flex items-center gap-2 mb-3">
             <Sparkles size={16} className="text-indigo-600" />
-            <span className="text-sm font-semibold text-gray-800">AI 理解你的需求后将生成：</span>
+            <span className="text-sm font-semibold text-gray-800">AI 提示词预览</span>
           </div>
+          <p className="text-xs text-gray-500 mb-2">你可以在生成前直接编辑提示词。</p>
           <div className="bg-white rounded-lg p-4 border border-blue-100 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-mono">
             {buildAIPrompt(formData)}
           </div>
