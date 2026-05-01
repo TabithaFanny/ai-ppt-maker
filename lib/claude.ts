@@ -1,10 +1,10 @@
 import { StyleConfig, StyleKit, UserInput, DeckPlan } from '@/types';
 import type { PPTXAnalysis } from './pptx-parser';
 import { resolveStyleConfig } from './style-bridge';
-import { withRetry, chatCompletion } from './api-client';
+import { withRetry, chatCompletion, deepseekChat } from './api-client';
 import { StyleConfigSchema, PPTJsonSchema, DeckPlanSchema, validateAIOutput } from './schemas';
 
-export { withRetry, chatCompletion } from './api-client';
+export { withRetry, chatCompletion, deepseekChat } from './api-client';
 
 export const analyzeStyle = async (
   imageBase64: string | null,
@@ -114,8 +114,8 @@ ${JSON.stringify(styleConfig, null, 2)}
 直接输出描述，不要添加额外说明。`;
 
   return withRetry(async () => {
-    const response = await chatCompletion(prompt);
-    return response;
+    const response = await deepseekChat([{ role: 'user', content: prompt }]);
+    return response.content;
   }, 3, 'translateRequirements');
 };
 
@@ -182,8 +182,8 @@ ${JSON.stringify(resolvedStyleConfig, null, 2)}
 直接输出有效的 JSON，不要添加注释或其他文字。`;
 
   return withRetry(async () => {
-    const response = await chatCompletion(prompt);
-    const text = response.replace(/```json\n?|\n?```/g, '').trim();
+    const response = await deepseekChat([{ role: 'user', content: prompt }]);
+    const text = response.content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(text);
     const validation = validateAIOutput(PPTJsonSchema, parsed, 'generatePPTJson');
     if (!validation.success) {
@@ -268,8 +268,8 @@ ${layoutPatterns || '- hero, two-column, grid, centered (默认)'}
 直接输出有效的 JSON，不要添加注释或其他文字。`;
 
   return withRetry(async () => {
-    const response = await chatCompletion(prompt);
-    const text = response.replace(/```json\n?|\n?```/g, '').trim();
+    const response = await deepseekChat([{ role: 'user', content: prompt }]);
+    const text = response.content.replace(/```json\n?|\n?```/g, '').trim();
     const parsed = JSON.parse(text);
     const validation = validateAIOutput(DeckPlanSchema, parsed, 'generateDeckPlan');
     if (!validation.success) {
