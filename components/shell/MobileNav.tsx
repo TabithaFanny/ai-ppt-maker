@@ -1,6 +1,6 @@
 'use client';
 
-import { Home, FolderOpen, Plus } from 'lucide-react';
+import { Home, FolderOpen, Plus, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -11,6 +11,7 @@ export default function MobileNav() {
     { href: '/', icon: Home, label: '首页' },
     { href: '/create', icon: Plus, label: '创建' },
     { href: '/projects', icon: FolderOpen, label: '项目' },
+    { href: '/settings', icon: Settings, label: '设置' },
   ];
 
   return (

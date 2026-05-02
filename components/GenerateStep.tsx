@@ -18,6 +18,7 @@ export default function GenerateStep() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   // 单张重生成状态
   const [slideImages, setSlideImages] = useState<Record<number, string>>({});
   const [regeneratingPage, setRegeneratingPage] = useState<number | null>(null);
@@ -264,8 +265,32 @@ export default function GenerateStep() {
   };
 
   const handleExportPDF = async () => {
+    // PDF 功能降级：提供复制内容替代方案
+    if (!currentProject?.pptJson) return;
     const { useToast } = await import('@/lib/toast');
-    useToast.getState().show('warning', 'PDF 导出功能即将支持，敬请期待');
+    const slides = currentProject.pptJson.slides;
+    const contentText = slides
+      .map((s, i) => `【第 ${i + 1} 页】${s.title}\n${s.content?.map(c => c.content).join('\n') || ''}`)
+      .join('\n\n');
+
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(contentText);
+        useToast.getState().show('success', 'PPT 内容已复制到剪贴板，可粘贴到 Word 或其他工具');
+        return;
+      } catch {
+        // fallback: download as txt
+      }
+    }
+    // fallback: 下载为 txt 文件
+    const blob = new Blob([contentText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentProject.pptJson.metadata.title || 'PPT内容'}.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    useToast.getState().show('success', '内容已下载为 TXT 文件');
   };
 
   if (slides.length === 0) {
@@ -326,6 +351,13 @@ export default function GenerateStep() {
           </button>
         </div>
         <button
+          onClick={() => setIsDarkMode(!isDarkMode)}
+          className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50"
+        >
+          {isDarkMode ? '☀️' : '🌙'}
+          {isDarkMode ? '浅色预览' : '深色预览'}
+        </button>
+        <button
           onClick={toggleFullscreen}
           className="md:hidden p-2 min-w-[44px] min-h-[44px] flex items-center justify-center border rounded hover:bg-gray-50"
           aria-label={isFullscreen ? '退出全屏' : '全屏预览'}
@@ -336,7 +368,9 @@ export default function GenerateStep() {
 
       {/* Slide preview area */}
       <div
-        className="flex-1 flex items-center justify-center bg-gray-100 p-4 md:p-8 relative"
+        className={`flex-1 flex items-center justify-center p-4 md:p-8 relative transition-colors ${
+          isDarkMode ? 'bg-[#1a1a2e]' : 'bg-gray-100'
+        }`}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
