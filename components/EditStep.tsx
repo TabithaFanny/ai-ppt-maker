@@ -44,6 +44,10 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
   const [progress, setProgress] = useState({ stage: '', progress: 0 });
   const versionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 文字编辑防抖：避免 1 patch/keystroke
+  const textDebounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingTextUpdatesRef = useRef<Map<string, { originalText: string; currentText: string }>>(new Map());
+
   // 逐页视觉预览
   const [isSlidePreviewOpen, setIsSlidePreviewOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
@@ -214,8 +218,30 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       return;
     }
     if (updates.content !== undefined && updates.content !== block.content) {
-      pushPatch(createUpdateTextPatch(currentSlide.id, blockId, block.content, updates.content));
-      setSaveStatus('unsaved');
+      // 防抖：500ms 内连续编辑只产生一个 patch
+      const existing = pendingTextUpdatesRef.current.get(blockId);
+      if (!existing) {
+        // 首次触发：记录原始文本
+        pendingTextUpdatesRef.current.set(blockId, { originalText: block.content, currentText: updates.content });
+      } else {
+        // 已有待发送的更新：只更新 currentText
+        existing.currentText = updates.content;
+      }
+      // 重置防抖定时器
+      const existingTimer = textDebounceTimersRef.current.get(blockId);
+      if (existingTimer) clearTimeout(existingTimer);
+      const slideId = currentSlide.id;
+      const originalText = pendingTextUpdatesRef.current.get(blockId)!.originalText;
+      const timer = setTimeout(() => {
+        const pending = pendingTextUpdatesRef.current.get(blockId);
+        if (pending) {
+          pushPatch(createUpdateTextPatch(slideId, blockId, originalText, pending.currentText));
+          setSaveStatus('unsaved');
+          pendingTextUpdatesRef.current.delete(blockId);
+        }
+        textDebounceTimersRef.current.delete(blockId);
+      }, 500);
+      textDebounceTimersRef.current.set(blockId, timer);
       return;
     }
     const updatedSlide = { ...currentSlide, content: currentSlide.content.map(b => b.id === blockId ? { ...b, ...updates } : b) };
