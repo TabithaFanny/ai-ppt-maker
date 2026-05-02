@@ -161,5 +161,25 @@ export const mockEditPatchBatch = [
   { operation: 'update_text' as const, slideId: 'mock-slide-id', elementId: 'mock-id-2', oldValue: '旧结论', newValue: '新结论', description: '修改结论' },
 ];
 
-// ====== 7. mock image ======
+// ====== 7. mock rewrite patch (Phase D2) ======
+export const mockRewritePatches: Record<string, typeof mockEditPatch> = {
+  professional: {
+    ...mockEditPatch, newValue: '[专业版] 社区治理面临的核心挑战与应对策略',
+    description: '专业语气改写标题',
+  },
+  concise: {
+    ...mockEditPatch, newValue: '社区治理核心挑战',
+    description: '简洁语气缩写标题',
+  },
+  persuasive: {
+    ...mockEditPatch, newValue: '重塑社区治理：挑战即机遇',
+    description: '有说服力语气改写标题',
+  },
+  defense: {
+    ...mockEditPatch, newValue: '社区治理核心挑战分析与创新应对方案',
+    description: '答辩语气改写标题',
+  },
+};
+
+// ====== 8. mock image ======
 export const mockSlideImageResult = { success: true, imageUrl: 'https://placehold.co/1792x1024/1a56db/ffffff?text=AI+Mock+Preview' };

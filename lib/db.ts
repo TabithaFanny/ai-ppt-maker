@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { Project, UploadedFile, StyleKit, AnalysisJob } from '@/types';
+import { Project, UploadedFile, StyleKit, AnalysisJob, ProjectImage } from '@/types';
 
 export interface ProjectVersion {
   id: string;
@@ -14,6 +14,7 @@ class AppDatabase extends Dexie {
   versions!: Table<ProjectVersion>;
   styleKits!: Table<StyleKit>;
   analysisJobs!: Table<AnalysisJob>;
+  projectImages!: Table<ProjectImage>;
 
   constructor() {
     super('ai-ppt-generator');
@@ -39,6 +40,14 @@ class AppDatabase extends Dexie {
       versions: 'id, projectId, createdAt',
       styleKits: 'id, sourceFileId, name, createdAt, updatedAt',
       analysisJobs: 'id, fileId, status, createdAt',
+    });
+    this.version(5).stores({
+      projects: 'id, userId, title, status, createdAt',
+      files: 'id, projectId, type, url',
+      versions: 'id, projectId, createdAt',
+      styleKits: 'id, sourceFileId, name, createdAt, updatedAt',
+      analysisJobs: 'id, fileId, status, createdAt',
+      projectImages: 'id, projectId, slideId, createdAt',
     });
   }
 }
@@ -103,7 +112,9 @@ export const versionService = {
   },
 
   async getByProject(projectId: string) {
-    return db.versions.where('projectId').equals(projectId).reverse().sortBy('createdAt');
+    // Dexie sortBy ignores preceding reverse(), so sort in JS after query
+    const versions = await db.versions.where('projectId').equals(projectId).toArray();
+    return versions.sort((a, b) => b.createdAt - a.createdAt); // descending
   },
 
   async restore(versionId: string) {
@@ -262,5 +273,38 @@ export const analysisJobService = {
 
   async clearCompleted() {
     await db.analysisJobs.where('status').anyOf(['completed', 'failed']).delete();
+  },
+};
+
+// ProjectImage CRUD (Phase F1)
+export const imageService = {
+  async save(projectId: string, slideId: string, slideIndex: number, imageUrl: string, prompt?: string) {
+    const record: ProjectImage = {
+      id: crypto.randomUUID(),
+      projectId,
+      slideId,
+      slideIndex,
+      imageUrl,
+      prompt,
+      createdAt: Date.now(),
+    };
+    await db.projectImages.add(record);
+    return record;
+  },
+
+  async getByProject(projectId: string) {
+    return db.projectImages.where('projectId').equals(projectId).toArray();
+  },
+
+  async getBySlide(projectId: string, slideId: string) {
+    return db.projectImages.where({ projectId, slideId }).toArray();
+  },
+
+  async delete(id: string) {
+    await db.projectImages.delete(id);
+  },
+
+  async deleteByProject(projectId: string) {
+    await db.projectImages.where('projectId').equals(projectId).delete();
   },
 };

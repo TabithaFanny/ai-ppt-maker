@@ -56,6 +56,7 @@ const SlideSchema = z.object({
   title: z.string(),
   mainConclusion: z.string(),
   content: z.array(ContentBlockSchema),
+  speakerNotes: z.string().optional(),
 });
 
 export const PPTJsonSchema = z.object({

@@ -3,10 +3,31 @@ import { translateRequirements, generatePPTJson } from '@/lib/claude';
 import { resolveStyleConfig } from '@/lib/style-bridge';
 import { planDeck } from '@/lib/deck-planner';
 import { resolveDeckPlanToPPTJson } from '@/lib/deck-resolver';
+import type { StyleConfig, StyleKit, UserInput } from '@/types';
 
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
-  const { styleConfig, styleKit, userInput, useDeckPlan = true } = await request.json();
+  let styleConfig: StyleConfig | undefined;
+  let styleKit: StyleKit | null | undefined;
+  let userInput: UserInput;
+  let useDeckPlan = true;
+
+  // 解析请求体在 try 外处理，避免 SSE stream 未开始就崩溃
+  try {
+    const body = await request.json() as { styleConfig?: StyleConfig; styleKit?: StyleKit | null; userInput: UserInput; useDeckPlan?: boolean };
+    styleConfig = body.styleConfig;
+    styleKit = body.styleKit;
+    userInput = body.userInput;
+    useDeckPlan = body.useDeckPlan ?? true;
+  } catch (parseError) {
+    return new Response(encoder.encode(`data: ${JSON.stringify({
+      stage: 'error',
+      error: parseError instanceof Error ? parseError.message : '请求解析失败',
+    })}\n\n`), {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
+    });
+  }
+
   const resolvedStyleConfig = resolveStyleConfig({ styleConfig, styleKit });
 
   const stream = new ReadableStream({

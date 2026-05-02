@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Project, StyleConfig, StyleReport, UserInput, PPTJson, DeckPlan, GenerationProgress, ImageCandidate, PromptLibrary, SlideVisualPrompt, TemplatePrompt, UserPrompt, StyleKit, AnalysisJob, Scenario } from '@/types';
 import type { EditPatch } from '@/types/generation';
-import { styleKitService, analysisJobService } from './db';
+import { styleKitService, analysisJobService, projectService } from './db';
 import { syncPromptTemplatesWithStyleKits } from './prompt-bridge';
 import {
   createEditHistory,
@@ -17,6 +17,8 @@ import { applyPatch, reversePatch } from './edit-patch';
 interface AppState {
   currentProject: Project | null;
   currentStep: number;
+  saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
+  selectedSlideIndex: number;
   // Phase 0: New state fields
   generationProgress: GenerationProgress | null;
   imageCandidates: ImageCandidate[];
@@ -37,6 +39,8 @@ interface AppState {
   // Actions
   setCurrentProject: (project: Project | null) => void;
   setCurrentStep: (step: number) => void;
+  setSaveStatus: (status: 'saved' | 'saving' | 'unsaved' | 'error') => void;
+  setSelectedSlideIndex: (index: number) => void;
   updateStyleConfig: (config: StyleConfig) => void;
   updateStyleReport: (report: StyleReport) => void;
   updateUserInput: (input: UserInput) => void;
@@ -77,6 +81,8 @@ interface AppState {
 export const useStore = create<AppState>((set, get) => ({
   currentProject: null,
   currentStep: 1,
+  saveStatus: 'saved',
+  selectedSlideIndex: 0,
   // Phase 0: New state fields
   generationProgress: null,
   imageCandidates: [],
@@ -101,11 +107,18 @@ export const useStore = create<AppState>((set, get) => ({
   setCurrentProject: (project) =>
     set((state) => ({
       currentProject: project,
+      editHistory: project?.id !== state.currentProject?.id
+        ? createEditHistory()
+        : state.editHistory,
+      canUndo: false,
+      canRedo: false,
       currentStyleKit: project?.styleKitId
         ? state.styleKitLibrary.find((styleKit) => styleKit.id === project.styleKitId) || state.currentStyleKit
         : state.currentStyleKit,
     })),
   setCurrentStep: (step) => set({ currentStep: step }),
+  setSaveStatus: (status) => set({ saveStatus: status }),
+  setSelectedSlideIndex: (index) => set({ selectedSlideIndex: index }),
   updateStyleConfig: (config) =>
     set((state) => ({
       currentProject: state.currentProject
@@ -390,56 +403,76 @@ export const useStore = create<AppState>((set, get) => ({
   },
   // Edit History Actions
   pushPatch: (patch) => {
-    set((state) => {
-      const newHistory = historyPush(state.editHistory, patch);
-      // 同时应用 patch 到 PPTJson
-      const newPPTJson = state.currentProject?.pptJson
-        ? applyPatch(state.currentProject.pptJson, patch)
-        : null;
-      return {
-        editHistory: newHistory,
-        canUndo: canUndo(newHistory),
-        canRedo: canRedo(newHistory),
-        currentProject: state.currentProject && newPPTJson
-          ? { ...state.currentProject, pptJson: newPPTJson, updatedAt: Date.now() }
-          : state.currentProject,
-      };
+    const prevProject = get().currentProject;
+    if (!prevProject?.pptJson) return;
+    const newPPTJson = applyPatch(prevProject.pptJson, patch);
+    const newHistory = historyPush(get().editHistory, patch);
+    set({
+      editHistory: newHistory,
+      canUndo: canUndo(newHistory),
+      canRedo: canRedo(newHistory),
+      currentProject: { ...prevProject, pptJson: newPPTJson, updatedAt: Date.now() },
+    });
+    // set 后异步持久化到 IndexedDB — 不在 set() updater 内做副作用
+    projectService.update(prevProject.id, {
+      pptJson: newPPTJson,
+      templateFileId: prevProject.templateFileId,
+      styleKitId: prevProject.styleKitId,
+      selectedSlideIndex: prevProject.selectedSlideIndex,
+      updatedAt: Date.now(),
+    }).then(() => {
+      get().setSaveStatus('saved');
+    }).catch((err: unknown) => {
+      console.error('[pushPatch] persist failed', err);
+      get().setSaveStatus('error');
     });
   },
   undo: () => {
-    set((state) => {
-      const { history: newHistory, patch } = historyUndo(state.editHistory);
-      if (!patch || !state.currentProject?.pptJson) return state;
-
-      const newPPTJson = reversePatch(state.currentProject.pptJson, patch);
-      return {
-        editHistory: newHistory,
-        canUndo: canUndo(newHistory),
-        canRedo: canRedo(newHistory),
-        currentProject: {
-          ...state.currentProject,
-          pptJson: newPPTJson,
-          updatedAt: Date.now(),
-        },
-      };
+    const { history: newHistory, patch } = historyUndo(get().editHistory);
+    const prevProject = get().currentProject;
+    if (!patch || !prevProject?.pptJson) return;
+    const newPPTJson = reversePatch(prevProject.pptJson, patch);
+    set({
+      editHistory: newHistory,
+      canUndo: canUndo(newHistory),
+      canRedo: canRedo(newHistory),
+      currentProject: { ...prevProject, pptJson: newPPTJson, updatedAt: Date.now() },
+    });
+    projectService.update(prevProject.id, {
+      pptJson: newPPTJson,
+      templateFileId: prevProject.templateFileId,
+      styleKitId: prevProject.styleKitId,
+      selectedSlideIndex: prevProject.selectedSlideIndex,
+      updatedAt: Date.now(),
+    }).then(() => {
+      get().setSaveStatus('saved');
+    }).catch((err: unknown) => {
+      console.error('[undo] persist failed', err);
+      get().setSaveStatus('error');
     });
   },
   redo: () => {
-    set((state) => {
-      const { history: newHistory, patch } = historyRedo(state.editHistory);
-      if (!patch || !state.currentProject?.pptJson) return state;
-
-      const newPPTJson = applyPatch(state.currentProject.pptJson, patch);
-      return {
-        editHistory: newHistory,
-        canUndo: canUndo(newHistory),
-        canRedo: canRedo(newHistory),
-        currentProject: {
-          ...state.currentProject,
-          pptJson: newPPTJson,
-          updatedAt: Date.now(),
-        },
-      };
+    const { history: newHistory, patch } = historyRedo(get().editHistory);
+    const prevProject = get().currentProject;
+    if (!patch || !prevProject?.pptJson) return;
+    const newPPTJson = applyPatch(prevProject.pptJson, patch);
+    set({
+      editHistory: newHistory,
+      canUndo: canUndo(newHistory),
+      canRedo: canRedo(newHistory),
+      currentProject: { ...prevProject, pptJson: newPPTJson, updatedAt: Date.now() },
+    });
+    projectService.update(prevProject.id, {
+      pptJson: newPPTJson,
+      templateFileId: prevProject.templateFileId,
+      styleKitId: prevProject.styleKitId,
+      selectedSlideIndex: prevProject.selectedSlideIndex,
+      updatedAt: Date.now(),
+    }).then(() => {
+      get().setSaveStatus('saved');
+    }).catch((err: unknown) => {
+      console.error('[redo] persist failed', err);
+      get().setSaveStatus('error');
     });
   },
 }));

@@ -7,9 +7,10 @@ import { useStore } from '@/lib/store';
 import { projectService } from '@/lib/db';
 import { isMockMode } from '@/lib/api-client';
 import EnhancedRequirementsForm from '@/components/EnhancedRequirementsForm';
-import { StyleKitWizard } from '@/components/style-kit';
+import StyleKitWizard from '@/components/style-kit/StyleKitWizard';
 import { StyleKit } from '@/types';
 import { styleKitToStyleConfig } from '@/lib/style-bridge';
+import { useStyleKitInit } from '@/hooks/useStyleKitInit';
 import { Check, Upload, FileText, Sparkles } from 'lucide-react';
 
 const EditStep = lazy(() => import('@/components/EditStep'));
@@ -30,7 +31,7 @@ function getStepStatus(step: number, currentStep: number, store: any): { status:
   const hasUploaded = !!currentProject?.templateFileId;
   const hasStyle = !!store.currentStyleKit || !!currentProject?.styleKitId;
   const hasSlides = !!(currentProject?.pptJson?.slides && currentProject.pptJson.slides.length > 0);
-  const slideIndex = store.selectedSlideIndex || 1;
+  const slideIndex = store.selectedSlideIndex ?? 1;
 
   // 前置条件
   const canAccess: Record<number, boolean> = {
@@ -73,16 +74,32 @@ export default function CreatePage() {
   const router = useRouter();
   const store = useStore();
   const { currentProject, currentStep, setCurrentProject, setCurrentStep } = store;
+  const { isInitialized: styleKitReady } = useStyleKitInit();
 
   useEffect(() => {
     const initProject = async () => {
       if (!currentProject) {
-        const project = await projectService.create({ title: '新项目', status: 'draft' });
-        setCurrentProject(project);
+        // 尝试恢复最近的项目（支持跨刷新持久化）
+        const projects = await projectService.getAll();
+        if (projects.length > 0) {
+          const latest = projects[0];
+          setCurrentProject(latest);
+          // 恢复步骤：根据项目状态推断当前步骤
+          if (latest.pptJson) {
+            setCurrentStep(4);
+          } else if (latest.styleKitId) {
+            setCurrentStep(3);
+          } else if (latest.templateFileId) {
+            setCurrentStep(2);
+          }
+        } else {
+          const project = await projectService.create({ title: '新项目', status: 'draft' });
+          setCurrentProject(project);
+        }
       }
     };
     initProject();
-  }, [currentProject, setCurrentProject]);
+  }, [currentProject, setCurrentProject, setCurrentStep]);
 
   const handleStepClick = useCallback((stepNum: number) => {
     if (stepNum === currentStep) return;
@@ -107,6 +124,7 @@ export default function CreatePage() {
             <Link href="/" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">首页</Link>
             <Link href="/create" className="text-sm text-[#1e40af] border-b-2 border-[#1e40af] pb-1">创建</Link>
             <Link href="/projects" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">项目</Link>
+            <Link href="/settings" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">设置</Link>
           </nav>
         </div>
       </header>

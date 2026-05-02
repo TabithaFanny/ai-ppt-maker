@@ -31,6 +31,7 @@ const SUPPORTED_OPERATIONS = new Set([
   'delete_element',
   'add_element',
   'replace_layout',
+  'update_title',
 ]);
 
 const VALID_LAYOUTS = new Set(['title', 'content', 'image', 'chart', 'quote']);
@@ -99,6 +100,17 @@ export function validatePatch(pptJson: PPTJson, patch: EditPatch): ValidationRes
 
     case 'replace_layout':
       validateReplaceLayout(slide, patch, errors, warnings);
+      break;
+
+    case 'update_title':
+      // update_title 直接修改 slide.title，不需要 elementId
+      // oldValue/newValue 必须是字符串
+      if (typeof patch.oldValue !== 'string' || typeof patch.newValue !== 'string') {
+        errors.push({
+          code: 'INVALID_TITLE_VALUES',
+          message: '标题修改的 oldValue 和 newValue 必须是字符串',
+        });
+      }
       break;
   }
 

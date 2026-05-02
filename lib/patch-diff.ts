@@ -146,6 +146,20 @@ export function generatePatchDiff(pptJson: PPTJson, patch: EditPatch): PatchDiff
       };
     }
 
+    case 'update_title': {
+      return {
+        slideId: patch.slideId,
+        slideTitle,
+        operation: 'update_title',
+        summary: `修改标题: "${(patch.oldValue as string)?.slice(0, 30)}" → "${(patch.newValue as string)?.slice(0, 30)}"`,
+        changes: [{
+          field: 'title',
+          oldValue: patch.oldValue,
+          newValue: patch.newValue,
+        }],
+      };
+    }
+
     default:
       return {
         slideId: patch.slideId,

@@ -28,8 +28,23 @@ function buildSlideContext(slide: Slide): string {
   }, null, 2);
 }
 
-function buildPrompt(slide: Slide, instruction: string, slideContext: string): string {
-  return `你是一个 PPT 编辑助手。用户会给你当前幻灯片的数据和一个修改指令。
+const REWRITE_PROMPTS: Record<string, string> = {
+  professional: '请用更专业、正式的商务语言改写内容。使用精确术语，保持客观严谨的语气。',
+  concise: '请将内容精简到最核心的要点。删除冗余修饰词，使用短句和关键词。',
+  persuasive: '请用更有说服力的语言改写。强调价值、成果和影响力，使用有力的动词和肯定的语气。',
+  defense: '请用适合答辩场景的语言改写。结构清晰，逻辑严密，突出创新点和成果，适合口头陈述。',
+};
+
+function buildPrompt(slide: Slide, instruction: string, slideContext: string, rewriteMode?: string, customInstruction?: string): string {
+  let modeInstruction = '';
+  if (rewriteMode && REWRITE_PROMPTS[rewriteMode]) {
+    modeInstruction = `\n**语气要求**：${REWRITE_PROMPTS[rewriteMode]}`;
+  }
+  if (customInstruction?.trim()) {
+    modeInstruction += `\n**补充要求**：${customInstruction.trim()}`;
+  }
+
+  return `你是一个 PPT 编辑助手。用户会给你当前幻灯片的数据和一个修改指令。${modeInstruction}
 
 **严格规则**：
 1. 你只能修改当前幻灯片，不允许影响其他幻灯片
@@ -124,7 +139,10 @@ function tryParseAndValidate(jsonStr: string, slideId: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { slide, instruction } = body as { slide: Slide; instruction: string };
+    const { slide, instruction, rewriteMode, customInstruction } = body as {
+      slide: Slide; instruction: string;
+      rewriteMode?: string; customInstruction?: string;
+    };
 
     if (!slide || !instruction) {
       return fail('缺少 slide 或 instruction 参数', 400);
@@ -136,17 +154,18 @@ export async function POST(request: Request) {
 
     // AI_MOCK=true 直接返回 mock patch
     if (isMockMode()) {
+      const modeLabel = rewriteMode ? REWRITE_PROMPTS[rewriteMode]?.slice(0, 20) : '';
       return ok({
         ...mockEditPatch,
         slideId: slide.id,
         elementId: slide.content[0]?.id || 'mock-element-id',
         oldValue: slide.title,
-        newValue: `[Mock] ${slide.title}`,
+        newValue: `[Mock${modeLabel ? ' ' + modeLabel : ''}] ${slide.title}`,
       });
     }
 
     const slideContext = buildSlideContext(slide);
-    const prompt = buildPrompt(slide, instruction, slideContext);
+    const prompt = buildPrompt(slide, instruction, slideContext, rewriteMode, customInstruction);
 
     let lastError = '';
 

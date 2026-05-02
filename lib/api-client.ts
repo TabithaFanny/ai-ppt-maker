@@ -94,25 +94,87 @@ export async function withRetry<T>(
 
 /**
  * 检查是否是 mock 模式
+ * 优先级: localStorage 运行时设置 > 环境变量 AI_MOCK
  */
 export function isMockMode(): boolean {
+  // Client-side: 检查 localStorage 中的运行时模式
+  if (typeof window !== 'undefined') {
+    try {
+      const mode = localStorage.getItem('ai-ppt-mode');
+      if (mode === 'mock') return true;
+      if (mode === 'real') return false;
+      if (mode === 'auto') {
+        const keys = JSON.parse(localStorage.getItem('ai-ppt-keys') || '{}');
+        const hasAnyKey = !!(keys.minimax || keys.deepseek || keys.openai);
+        return !hasAnyKey; // auto: 无 key 时 mock，有 key 时 real
+      }
+    } catch {}
+  }
+  // Server-side 或 fallback: 使用环境变量
   return AI_MOCK;
+}
+
+/**
+ * 获取当前 AI 模式
+ */
+export function getAiMode(): 'mock' | 'real' | 'auto' {
+  if (typeof window !== 'undefined') {
+    try {
+      const mode = localStorage.getItem('ai-ppt-mode') as 'mock' | 'real' | 'auto' | null;
+      if (mode && ['mock', 'real', 'auto'].includes(mode)) return mode;
+    } catch {}
+  }
+  return AI_MOCK ? 'mock' : 'real';
+}
+
+/**
+ * 保存 AI 模式到 localStorage
+ */
+export function setAiMode(mode: 'mock' | 'real' | 'auto'): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem('ai-ppt-mode', mode);
+}
+
+/**
+ * 获取 localStorage 中的 API Keys
+ */
+export function getStoredApiKeys(): { minimax: string; deepseek: string; openai: string } {
+  if (typeof window === 'undefined') return { minimax: '', deepseek: '', openai: '' };
+  try {
+    return JSON.parse(localStorage.getItem('ai-ppt-keys') || '{"minimax":"","deepseek":"","openai":""}');
+  } catch {
+    return { minimax: '', deepseek: '', openai: '' };
+  }
+}
+
+/**
+ * 保存 API Keys 到 localStorage
+ */
+export function setStoredApiKeys(keys: { minimax?: string; deepseek?: string; openai?: string }): void {
+  if (typeof window === 'undefined') return;
+  const current = getStoredApiKeys();
+  const merged = { ...current, ...keys };
+  localStorage.setItem('ai-ppt-keys', JSON.stringify(merged));
 }
 
 /**
  * 检查 API key 是否存在（mock 模式下不检查）
  */
 function checkKey(key: string, name: string): boolean {
-  if (AI_MOCK) return true;
+  if (isMockMode()) return true;
   return !!key;
 }
 
 function requireKey(key: string, name: string): void {
-  if (AI_MOCK) return;
-  if (!key) throw new AIError({
+  if (isMockMode()) return;
+  // 同时检查环境变量和 localStorage
+  const storedKeys = getStoredApiKeys();
+  const storedKey = storedKeys[name.toLowerCase() as keyof typeof storedKeys] || '';
+  if (key || storedKey) return;
+  throw new AIError({
     provider: name,
     stage: 'config',
-    message: `${name}_API_KEY 未配置，设置 AI_MOCK=true 可使用 mock 模式`,
+    message: `${name}_API_KEY 未配置。请在设置页面中配置 API Key，或设置 AI_MOCK=true 使用 mock 模式`,
     fallbackUsed: null,
   });
 }

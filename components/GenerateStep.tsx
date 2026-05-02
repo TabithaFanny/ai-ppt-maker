@@ -9,6 +9,7 @@ import { buildRenderSpec, getSlideBackground } from '@/lib/render-spec';
 import { autoFixPPTJson } from '@/lib/auto-fixer';
 import { exportRenderSpecToPPTX } from '@/lib/export-pptx';
 import { generateImage } from '@/lib/gpt-image';
+import { imageService } from '@/lib/db';
 import type { StyleKit } from '@/types';
 
 export default function GenerateStep() {
@@ -30,11 +31,26 @@ export default function GenerateStep() {
 
   const slides = currentProject?.pptJson?.slides || [];
 
+  // 挂载时从 IndexedDB 恢复已保存的 AI 图片
+  useEffect(() => {
+    if (!currentProject?.id) return;
+    imageService.getByProject(currentProject.id).then((images) => {
+      if (images.length > 0) {
+        const imageMap: Record<number, string> = {};
+        for (const img of images) {
+          imageMap[img.slideIndex] = img.imageUrl;
+        }
+        setSlideImages(imageMap);
+      }
+    }).catch(console.error);
+  }, [currentProject?.id]);
+
   const nextSlide = () => setCurrentIndex((prev) => Math.min(prev + 1, slides.length - 1));
   const prevSlide = () => setCurrentIndex((prev) => Math.max(prev - 1, 0));
 
   const handleTouchStart = (e: TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    touchEndX.current = e.touches[0].clientX; // reset to avoid ghost swipe
   };
 
   const handleTouchMove = (e: TouchEvent) => {
@@ -49,6 +65,7 @@ export default function GenerateStep() {
     } else if (diff < -threshold) {
       prevSlide();
     }
+    touchEndX.current = touchStartX.current; // reset for next gesture
   };
 
   const toggleFullscreen = () => {
@@ -112,6 +129,10 @@ export default function GenerateStep() {
       if (result.success && result.imageUrl) {
         setSlideImages((prev) => ({ ...prev, [modalPageIndex]: result.imageUrl! }));
         setPreviewUrl(result.imageUrl);
+        // 持久化
+        if (currentProject?.id && slides[modalPageIndex]) {
+          imageService.save(currentProject.id, slides[modalPageIndex].id, modalPageIndex, result.imageUrl).catch(console.error);
+        }
         const { useToast } = await import('@/lib/toast');
         useToast.getState().show('success', '图片已更新');
       } else {
@@ -140,6 +161,10 @@ export default function GenerateStep() {
         if (result.success && result.imageUrl) {
           setSlideImages(prev => ({ ...prev, [i]: result.imageUrl! }));
           successCount++;
+          // 持久化到 IndexedDB
+          if (currentProject?.id && slides[i]) {
+            imageService.save(currentProject.id, slides[i].id, i, result.imageUrl).catch(console.error);
+          }
         }
       } catch (e) {
         console.error(`第 ${i + 1} 页生成失败:`, e);
@@ -187,14 +212,22 @@ export default function GenerateStep() {
         slideRoles as Map<string, string> as any
       );
 
-      await exportRenderSpecToPPTX(renderSpec, {
+      const warnings = await exportRenderSpecToPPTX(renderSpec, {
         fileName: `${pptJson.metadata.title}.pptx`,
         onProgress: (current, total) => setProgress({ current, total }),
       });
 
       const { useToast } = await import('@/lib/toast');
       const fixMsg = fixResult.fixed > 0 ? `（自动修复了 ${fixResult.fixed} 个问题）` : '';
-      useToast.getState().show('success', `PPT 导出成功${fixMsg}`);
+      const warningMsg = warnings.length > 0 ? `（${warnings.length} 个图片警告）` : '';
+      if (warnings.length > 0) {
+        useToast.getState().show('warning', `PPT 导出完成${fixMsg}${warningMsg}`);
+      } else {
+        useToast.getState().show('success', `PPT 导出成功${fixMsg}${warningMsg}`);
+      }
+      if (warnings.length > 0) {
+        console.warn('PPT 导出警告:', warnings);
+      }
     } catch (error) {
       console.error('导出失败:', error);
       const { useToast } = await import('@/lib/toast');
@@ -214,7 +247,8 @@ export default function GenerateStep() {
     a.href = url;
     a.download = `${currentProject.pptJson.metadata.title}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    // 延迟回收，给浏览器足够时间完成下载
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   const copyShareLink = async () => {
@@ -227,6 +261,11 @@ export default function GenerateStep() {
       const { useToast } = await import('@/lib/toast');
       useToast.getState().show('error', '复制失败，请重试');
     }
+  };
+
+  const handleExportPDF = async () => {
+    const { useToast } = await import('@/lib/toast');
+    useToast.getState().show('warning', 'PDF 导出功能即将支持，敬请期待');
   };
 
   if (slides.length === 0) {
@@ -269,6 +308,14 @@ export default function GenerateStep() {
           >
             <Download size={20} />
             {isGenerating ? `导出中 ${progress.current}/${progress.total}` : '导出 PPTX'}
+          </button>
+          <button
+            onClick={handleExportPDF}
+            disabled={true}
+            className="flex items-center gap-2 px-4 py-2 border rounded text-gray-400 cursor-not-allowed hover:bg-gray-50"
+          >
+            <Download size={20} />
+            导出 PDF
           </button>
           <button
             onClick={copyShareLink}

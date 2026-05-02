@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Layout, X, RefreshCw, Loader2 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import OutlineTree from './OutlineTree';
-import SlideEditor from './SlideEditor';
-import ElementCanvas from './ElementCanvas';
-import PropertyPanel from './PropertyPanel';
+import SlideEditor from './editor/SlideEditor';
+import ElementCanvas from './editor/ElementCanvas';
+import PropertyPanel from './editor/PropertyPanel';
 import AssetLibrary from './AssetLibrary';
 import ResidualValidator from './ResidualValidator';
 import VersionHistory from './VersionHistory';
-import AiEditPanel from './AiEditPanel';
-import EditStepToolbar, { type EditMode } from './EditStepToolbar';
+import AiEditPanel from './editor/AiEditPanel';
+import EditStepToolbar, { type EditMode } from './editor/EditStepToolbar';
 import { Slide, PPTJson, ContentBlock } from '@/types';
-import { versionService } from '@/lib/db';
+import { versionService, projectService, imageService } from '@/lib/db';
 import { resolveProjectStyleConfig } from '@/lib/style-bridge';
 import { createUpdateTextPatch, createMovePatch, createResizePatch, createDeleteElementPatch, createAddElementPatch } from '@/lib/edit-patch';
 import { autoFixSlideRealtime } from '@/lib/auto-fixer';
@@ -21,6 +22,7 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
   const {
     currentProject, currentStyleKit, updatePPTJson, setCurrentStep,
     pushPatch, undo, redo, canUndo, canRedo,
+    saveStatus, setSaveStatus, selectedSlideIndex, setSelectedSlideIndex,
   } = useStore();
   const resolvedStyleConfig = resolveProjectStyleConfig(currentProject, currentStyleKit);
 
@@ -42,6 +44,11 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
   const [progress, setProgress] = useState({ stage: '', progress: 0 });
   const versionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 逐页视觉预览
+  const [isSlidePreviewOpen, setIsSlidePreviewOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+
   const currentSlide = slides.find((s) => s.id === currentSlideId);
 
   // 键盘快捷键
@@ -60,14 +67,43 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
     if (currentProject?.pptJson) {
       const fixedSlides = currentProject.pptJson.slides.map((s) => {
         const { slide } = autoFixSlideRealtime(s);
-        return slide;
+        return { ...slide, speakerNotes: slide.speakerNotes ?? '' };
       });
       setSlides(fixedSlides);
-      if (fixedSlides.length > 0) setCurrentSlideId(fixedSlides[0].id);
+      if (fixedSlides.length > 0) {
+        const savedIndex = currentProject.selectedSlideIndex ?? useStore.getState().selectedSlideIndex ?? 0;
+        const idx = Math.min(savedIndex, fixedSlides.length - 1);
+        setCurrentSlideId(fixedSlides[idx].id);
+        setSelectedSlideIndex(idx);
+      }
     } else if (resolvedStyleConfig && currentProject?.userInput) {
       generatePPT();
     }
   }, [currentProject, resolvedStyleConfig]);
+
+  // 持久化 selectedSlideIndex（300ms 防抖）
+  const slideIndexTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (currentProject?.id && selectedSlideIndex >= 0) {
+      if (slideIndexTimerRef.current) clearTimeout(slideIndexTimerRef.current);
+      slideIndexTimerRef.current = setTimeout(() => {
+        projectService.update(currentProject.id, { selectedSlideIndex }).catch(console.error);
+      }, 300);
+    }
+    return () => { if (slideIndexTimerRef.current) clearTimeout(slideIndexTimerRef.current); };
+  }, [selectedSlideIndex, currentProject?.id]);
+
+  // beforeunload 保护：有未保存更改时阻止关闭
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveStatus === 'unsaved') {
+        e.preventDefault();
+        e.returnValue = ''; // Firefox/Safari compat
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveStatus]);
 
   // ---- 操作函数 ----
 
@@ -94,8 +130,12 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
             setProgress({ stage: data.stage, progress: data.progress });
             if (data.stage === 'complete' && data.data) {
               updatePPTJson(data.data);
-              setSlides(data.data.slides);
-              if (data.data.slides.length > 0) setCurrentSlideId(data.data.slides[0].id);
+              const fixedSlides = data.data.slides.map((s: Slide) => ({ ...s, speakerNotes: s.speakerNotes ?? '' }));
+              setSlides(fixedSlides);
+              if (fixedSlides.length > 0) {
+                setCurrentSlideId(fixedSlides[0].id);
+                setSelectedSlideIndex(0);
+              }
             }
           } catch { /* skip non-JSON lines */ }
         }
@@ -119,16 +159,24 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
     if (!currentProject?.id) return;
     if (versionTimerRef.current) clearTimeout(versionTimerRef.current);
     versionTimerRef.current = setTimeout(async () => {
-      await versionService.save(currentProject.id, pptJson);
-    }, 2000);
-  }, [currentProject?.id]);
+      setSaveStatus('saving');
+      try {
+        await versionService.save(currentProject.id, pptJson);
+        setSaveStatus('saved');
+      } catch {
+        setSaveStatus('error');
+      }
+    }, 1000);
+  }, [currentProject?.id, setSaveStatus]);
 
   const commitSlides = (newSlides: Slide[]) => {
     setSlides(newSlides);
+    setSaveStatus('unsaved');
     if (currentProject?.pptJson) {
       const newPPTJson = { ...currentProject.pptJson, slides: newSlides };
       updatePPTJson(newPPTJson);
       saveVersion(newPPTJson);
+      projectService.update(currentProject.id, { pptJson: newPPTJson }).catch(console.error);
     }
   };
 
@@ -145,10 +193,12 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       pushPatch(action === 'resize'
         ? createResizePatch(currentSlide.id, blockId, block.position, updates.position)
         : createMovePatch(currentSlide.id, blockId, block.position, updates.position));
+      setSaveStatus('unsaved');
       return;
     }
     if (updates.content !== undefined && updates.content !== block.content) {
       pushPatch(createUpdateTextPatch(currentSlide.id, blockId, block.content, updates.content));
+      setSaveStatus('unsaved');
       return;
     }
     const updatedSlide = { ...currentSlide, content: currentSlide.content.map(b => b.id === blockId ? { ...b, ...updates } : b) };
@@ -177,10 +227,10 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
     if (slides.length <= 1) return;
     const idx = slides.findIndex(s => s.id === currentSlideId);
     const newSlides = slides.filter(s => s.id !== currentSlideId);
-    handleSlideUpdate(newSlides[Math.max(0, idx - 1)]);
-    // Update state immediately for delete
-    setSlides(newSlides);
-    setCurrentSlideId(newSlides[Math.max(0, idx - 1)].id);
+    commitSlides(newSlides);
+    const nextIdx = Math.max(0, Math.min(idx, newSlides.length - 1));
+    setCurrentSlideId(newSlides[nextIdx].id);
+    setSelectedSlideIndex(nextIdx);
   };
 
   const generateImageForSlide = async () => {
@@ -199,6 +249,11 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
           position: { x: 0.1, y: 0.3, width: 0.8, height: 0.5 },
         };
         handleSlideUpdate({ ...currentSlide, content: [...currentSlide.content, imgBlock] });
+        // 持久化到 IndexedDB
+        if (currentProject?.id) {
+          const slideIdx = slides.findIndex(s => s.id === currentSlide.id);
+          imageService.save(currentProject.id, currentSlide.id, slideIdx, data.imageUrl).catch(console.error);
+        }
         const { useToast } = await import('@/lib/toast');
         useToast.getState().show('success', '配图生成成功');
       }
@@ -214,6 +269,37 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       updatePPTJson(pptJson);
       setSlides(pptJson.slides);
       if (pptJson.slides.length > 0) setCurrentSlideId(pptJson.slides[0].id);
+      if (currentProject?.id) {
+        projectService.update(currentProject.id, { pptJson }).catch(console.error);
+        saveVersion(pptJson);
+      }
+    }
+  };
+
+  const openSlidePreview = async () => {
+    if (!currentSlide || !resolvedStyleConfig) return;
+    setIsLoadingPreview(true);
+    setPreviewImageUrl(null);
+    setIsSlidePreviewOpen(true);
+    try {
+      const res = await fetch('/api/generate-slide-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slide: currentSlide, styleConfig: resolvedStyleConfig, styleKit: currentStyleKit }),
+      });
+      if (!res.ok) throw new Error('生成失败');
+      const data = await res.json();
+      if (data.success && data.imageUrl) {
+        setPreviewImageUrl(data.imageUrl);
+      } else {
+        throw new Error(data.error || '返回数据异常');
+      }
+    } catch (error) {
+      console.error('预览生成失败:', error);
+      const { useToast } = await import('@/lib/toast');
+      useToast.getState().show('error', '预览生成失败，请重试');
+      setIsSlidePreviewOpen(false);
+    } finally {
+      setIsLoadingPreview(false);
     }
   };
 
@@ -269,7 +355,10 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
         onDeleteSlide={deleteSlide}
         onGenerateImage={generateImageForSlide}
         isGeneratingImage={isGeneratingImage}
+        onPreviewSlide={openSlidePreview}
+        isLoadingPreview={isLoadingPreview}
         slidesCount={slides.length}
+        saveStatus={saveStatus}
         versionHistoryComponent={
           currentProject?.id ? (
             <VersionHistory projectId={currentProject.id} onRestore={handleRestoreVersion} />
@@ -289,7 +378,12 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
           <OutlineTree
             slides={slides}
             currentSlideId={currentSlideId}
-            onSlideSelect={(id) => { setCurrentSlideId(id); setIsOutlineOpen(false); }}
+            onSlideSelect={(id) => {
+              setCurrentSlideId(id);
+              const idx = slides.findIndex(s => s.id === id);
+              if (idx >= 0) setSelectedSlideIndex(idx);
+              setIsOutlineOpen(false);
+            }}
             onReorder={(newSlides) => commitSlides(newSlides)}
           />
         </div>
@@ -302,7 +396,12 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
                 <SlideEditor slide={currentSlide} onUpdate={handleSlideUpdate} />
               )}
               {editMode === 'element' && (
-                <div className="flex h-full">
+                <div className="flex h-full flex-col">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-100 text-xs text-blue-700">
+                    <Layout size={14} />
+                    <span>版式预览模式 — 此视图用于查看幻灯片版式结构，不支持自由拖拽编辑。如需修改内容请切换到「内容」模式。</span>
+                  </div>
+                  <div className="flex flex-1 min-h-0">
                   <div className="flex-1 p-4 overflow-auto">
                     <ElementCanvas
                       slide={currentSlide}
@@ -320,6 +419,7 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
                       onDelete={handleBlockDelete}
                     />
                   </div>
+                </div>
                 </div>
               )}
               {editMode === 'preview' && (
@@ -366,9 +466,62 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
           <AiEditPanel
             currentSlide={currentSlide}
             pptJson={currentProject.pptJson}
-            onApplyPatch={(patch) => { pushPatch(patch); setIsAiEditOpen(false); }}
+            onApplyPatch={(patch) => { pushPatch(patch); setSaveStatus('unsaved'); setIsAiEditOpen(false); }}
+            onInsertAsNewSlide={(newSlide) => {
+              const newSlides = [...slides, newSlide];
+              commitSlides(newSlides);
+              setCurrentSlideId(newSlide.id);
+              setSelectedSlideIndex(newSlides.length - 1);
+            }}
             onClose={() => setIsAiEditOpen(false)}
           />
+        </div>
+      )}
+
+      {/* 逐页视觉预览弹窗 */}
+      {isSlidePreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setIsSlidePreviewOpen(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="font-medium text-sm">幻灯片视觉预览</h3>
+              <button onClick={() => setIsSlidePreviewOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-4">
+              {isLoadingPreview ? (
+                <div className="flex items-center justify-center py-20">
+                  <Loader2 size={32} className="animate-spin text-blue-600" />
+                </div>
+              ) : previewImageUrl ? (
+                <div className="space-y-3">
+                  <img
+                    src={previewImageUrl}
+                    alt="幻灯片预览"
+                    className="w-full aspect-video object-contain bg-gray-100 rounded border"
+                  />
+                  <p className="text-xs text-gray-400 text-center">
+                    此预览仅用于查看当前页的视觉效果，不会替代可编辑 PPT 内容
+                  </p>
+                  <div className="flex justify-center gap-3">
+                    <button
+                      onClick={openSlidePreview}
+                      className="flex items-center gap-1.5 px-4 py-2 border rounded text-sm hover:bg-gray-50"
+                    >
+                      <RefreshCw size={14} />
+                      重新生成
+                    </button>
+                    <button
+                      onClick={() => setIsSlidePreviewOpen(false)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+                    >
+                      关闭
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
 

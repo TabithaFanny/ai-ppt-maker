@@ -229,12 +229,14 @@ ${styleDNAContext}
       return validation.data;
     }, 3, 'distillStyleKit');
 
+    const styleKitId = `stylekit-${sourceFileId}-${Date.now()}`;
+    const styleDNAId = `styledna-${sourceFileId}-${Date.now()}`;
     const styleKit = {
-      id: `stylekit-${sourceFileId}-${Date.now()}`,
+      id: styleKitId,
       name: styleKitName || result.name,
       sourceFileId,
       styleDNA: {
-        id: `styledna-${sourceFileId}-${Date.now()}`,
+        id: styleDNAId,
         name: result.name,
         sourceFileId,
         palette: result.palette,
@@ -248,7 +250,7 @@ ${styleDNAContext}
       } as StyleDNA,
       layoutPatterns: result.layoutPatterns.map((lp, idx) => ({
         id: `layout-${sourceFileId}-${idx}`,
-        styleKitId: `stylekit-${sourceFileId}-${Date.now()}`,
+        styleKitId,
         layoutType: lp.layoutType as LayoutType,
         structure: {
           zones: [],

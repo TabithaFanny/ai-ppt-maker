@@ -13,13 +13,83 @@ export interface ExportOptions {
   onProgress?: (current: number, total: number) => void;
 }
 
+/** 导出警告 */
+export interface ExportWarning {
+  slideIndex: number;
+  message: string;
+}
+
+/**
+ * 将 URL 转为 base64 data URL
+ * 跨域或失败时返回 null，不阻断流程
+ */
+async function urlToBase64(url: string): Promise<string | null> {
+  // 已经是 data URL 则直接返回
+  if (url.startsWith('data:')) return url;
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 预处理所有图片元素：将 URL 转为 base64
+ * 跨域/失败跳过并记录警告，不阻断导出
+ */
+async function resolveAllImageElements(
+  renderSpec: RenderSpec,
+): Promise<ExportWarning[]> {
+  const warnings: ExportWarning[] = [];
+
+  const resolvedSlides = await Promise.all(
+    renderSpec.slides.map(async (slide, slideIndex) => {
+      const resolvedElements = await Promise.all(
+        slide.elements.map(async (element) => {
+          if (element.type !== 'image' || !element.content) return element;
+
+          const base64 = await urlToBase64(element.content);
+          if (base64) {
+            return { ...element, content: base64 };
+          }
+          warnings.push({
+            slideIndex,
+            message: `第 ${slideIndex + 1} 页图片加载失败（跨域或超时），已跳过`,
+          });
+          return element;
+        }),
+      );
+      return { ...slide, elements: resolvedElements };
+    }),
+  );
+
+  // 原地替换
+  (renderSpec.slides as RenderSlide[]) = resolvedSlides;
+  return warnings;
+}
+
 /**
  * 从 RenderSpec 导出 PPTX
  */
 export async function exportRenderSpecToPPTX(
   renderSpec: RenderSpec,
-  options: ExportOptions
-): Promise<void> {
+  options: ExportOptions,
+): Promise<ExportWarning[]> {
+  const warnings: ExportWarning[] = [];
+
+  // 预处理图片 URL → base64
+  const imageWarnings = await resolveAllImageElements(renderSpec);
+  warnings.push(...imageWarnings);
+
   const pptx = new pptxgen();
 
   for (let index = 0; index < renderSpec.slides.length; index++) {
@@ -41,6 +111,7 @@ export async function exportRenderSpecToPPTX(
   }
 
   await pptx.writeFile({ fileName: options.fileName });
+  return warnings;
 }
 
 /**
@@ -79,8 +150,7 @@ function renderElement(pptxSlide: pptxgen.Slide, element: RenderElement): void {
             w: width,
             h: height,
           });
-        } catch (e) {
-          // 图片加载失败，插入占位文本
+        } catch {
           pptxSlide.addText('[图片加载失败]', {
             x,
             y,
@@ -96,7 +166,6 @@ function renderElement(pptxSlide: pptxgen.Slide, element: RenderElement): void {
       break;
 
     case 'chart':
-      // 图表暂用文本占位
       pptxSlide.addText(element.content || '[图表]', {
         x,
         y,
@@ -111,11 +180,9 @@ function renderElement(pptxSlide: pptxgen.Slide, element: RenderElement): void {
 
     case 'icon':
     case 'decoration':
-      // 装饰元素在 PPTX 中暂不渲染
       break;
 
     default:
-      // 兜底：作为文本渲染
       if (element.content) {
         pptxSlide.addText(element.content, {
           x,

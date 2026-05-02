@@ -125,6 +125,22 @@ export function createReplaceLayoutPatch(
   };
 }
 
+export function createUpdateTitlePatch(
+  slideId: string,
+  oldTitle: string,
+  newTitle: string
+): EditPatch {
+  return {
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    slideId,
+    operation: 'update_title',
+    oldValue: oldTitle,
+    newValue: newTitle,
+    description: `修改标题: "${oldTitle.slice(0, 30)}" → "${newTitle.slice(0, 30)}"`,
+  };
+}
+
 // ============ 应用/反转补丁 ============
 
 /**
@@ -218,6 +234,13 @@ function applyPatchToSlide(slide: Slide, patch: EditPatch, reverse: boolean): Sl
         ? (patch.oldValue as Slide['layout'])
         : (patch.newValue as Slide['layout']);
       return { ...slide, layout };
+    }
+
+    case 'update_title': {
+      const title = reverse
+        ? (patch.oldValue as string)
+        : (patch.newValue as string);
+      return { ...slide, title };
     }
 
     default:

@@ -104,6 +104,7 @@ export interface Project {
   pptJson?: PPTJson;
   generationProgress?: GenerationProgress;
   imageCandidates?: ImageCandidate[];
+  selectedSlideIndex?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -157,6 +158,7 @@ export interface Slide {
   title: string;
   mainConclusion: string;
   content: ContentBlock[];
+  speakerNotes?: string;
 }
 
 export interface UploadedFile {
@@ -319,6 +321,17 @@ export interface SlideImage {
   imageBase64: string;
   width: number;
   height: number;
+}
+
+/** 持久化的项目配图 */
+export interface ProjectImage {
+  id: string;
+  projectId: string;
+  slideId: string;
+  slideIndex: number;
+  imageUrl: string;
+  prompt?: string;
+  createdAt: number;
 }
 
 // 重新导出 StyleKit (来自 stylekit.ts，在 AnalysisJob.result 中使用)

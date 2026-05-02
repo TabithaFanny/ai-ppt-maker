@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import ErrorBoundary from "@/components/ErrorBoundary";
-import Toast from "@/components/Toast";
-import NetworkStatus from "@/components/NetworkStatus";
-import MobileNav from "@/components/MobileNav";
+import ErrorBoundary from "@/components/shell/ErrorBoundary";
+import Toast from "@/components/shell/Toast";
+import NetworkStatus from "@/components/shell/NetworkStatus";
+import MobileNav from "@/components/shell/MobileNav";
 
 export const metadata: Metadata = {
   title: "AI PPT 生成平台",

@@ -5,6 +5,10 @@ import type { SlideRole, LayoutType, LayoutZone } from './stylekit';
 import type { SlideElement } from './elements';
 import type { ScenarioType, AudienceType } from './project';
 
+// ============ RewriteMode (Phase D2) ============
+
+export type RewriteMode = 'professional' | 'concise' | 'persuasive' | 'defense';
+
 // ============ DeckPlan (内容规划层) — Phase 1 ============
 
 export interface SlidePlan {
@@ -96,7 +100,8 @@ export interface EditPatch {
     | 'resize_element'
     | 'delete_element'
     | 'add_element'
-    | 'replace_layout';
+    | 'replace_layout'
+    | 'update_title';
   oldValue: unknown;
   newValue: unknown;
   description: string;

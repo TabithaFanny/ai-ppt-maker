@@ -20,9 +20,12 @@ export function createEditHistory(): EditHistory {
  */
 export function pushPatch(history: EditHistory, patch: EditPatch): EditHistory {
   const newUndoStack = [...history.undoStack, patch];
-  // 限制栈大小
+  // 限制栈大小：shift() 会修改原数组，改用 slice 保持不可变性
   if (newUndoStack.length > MAX_HISTORY) {
-    newUndoStack.shift();
+    return {
+      undoStack: newUndoStack.slice(newUndoStack.length - MAX_HISTORY),
+      redoStack: [], // 新操作清空 redo 栈
+    };
   }
   return {
     undoStack: newUndoStack,

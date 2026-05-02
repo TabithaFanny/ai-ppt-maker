@@ -19,6 +19,7 @@ export default function Home() {
             <Link href="/" className="text-sm text-[#1e40af] border-b-2 border-[#1e40af] pb-1">首页</Link>
             <Link href="/create" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">创建</Link>
             <Link href="/projects" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">项目</Link>
+            <Link href="/settings" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">设置</Link>
           </nav>
         </div>
       </header>
