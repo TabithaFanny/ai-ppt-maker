@@ -138,12 +138,16 @@ export const useStore = create<AppState>((set, get) => ({
         ? { ...state.currentProject, userInput: input, updatedAt: Date.now() }
         : null,
     })),
-  updatePPTJson: (json) =>
+  updatePPTJson: (json) => {
+    const prevProject = get().currentProject;
+    if (!prevProject) return;
     set((state) => ({
       currentProject: state.currentProject
         ? { ...state.currentProject, pptJson: json, updatedAt: Date.now() }
         : null,
-    })),
+    }));
+    projectService.update(prevProject.id, { pptJson: json, updatedAt: Date.now() }).catch(console.error);
+  },
   updateDeckPlan: (plan) =>
     set((state) => ({
       currentProject: state.currentProject
