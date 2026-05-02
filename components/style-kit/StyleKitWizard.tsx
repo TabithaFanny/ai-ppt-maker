@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { AnalysisJob, StyleKit, StyleDNA, SlideImage } from '@/types';
-import { StyleKitReport } from '@/components/style-kit';
+import StyleKitReport from './StyleKitReport';
 import { Sparkles, Loader2, AlertCircle, FileText, Palette, Type, Check, ChevronRight } from 'lucide-react';
 import { analysisJobService } from '@/lib/db';
 
