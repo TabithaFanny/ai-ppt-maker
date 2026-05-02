@@ -12,6 +12,7 @@ import { StyleKit } from '@/types';
 import { styleKitToStyleConfig } from '@/lib/style-bridge';
 import { useStyleKitInit } from '@/hooks/useStyleKitInit';
 import { Check, Upload, FileText, Sparkles } from 'lucide-react';
+import Header from '@/components/shell/Header';
 
 const EditStep = lazy(() => import('@/components/EditStep'));
 const GenerateStep = lazy(() => import('@/components/GenerateStep'));
@@ -111,23 +112,7 @@ export default function CreatePage() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
-      {/* 全局导航 */}
-      <header className="bg-white border-b border-[#e2e8f0] sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#1e40af] rounded-lg flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            <span className="text-base font-semibold text-[#0f172a]">AI PPT Generator</span>
-          </div>
-          <nav className="flex items-center gap-8">
-            <Link href="/" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">首页</Link>
-            <Link href="/create" className="text-sm text-[#1e40af] border-b-2 border-[#1e40af] pb-1">创建</Link>
-            <Link href="/projects" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">项目</Link>
-            <Link href="/settings" className="text-sm text-[#64748b] hover:text-[#0f172a] transition-colors">设置</Link>
-          </nav>
-        </div>
-      </header>
+      <Header />
 
       {/* 步骤指示器 */}
       <div className="bg-white border-b border-[#e2e8f0]">

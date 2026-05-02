@@ -9,6 +9,7 @@ import {
   Edit, Eye, CheckCircle2, Clock, AlertCircle, Sparkles, FileText
 } from 'lucide-react';
 import { importExportService } from '@/lib/import-export';
+import Header from '@/components/shell/Header';
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -133,8 +134,9 @@ export default function ProjectsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Header />
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
+        {/* Page header */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">我的项目</h1>
