@@ -101,7 +101,9 @@ export interface EditPatch {
     | 'delete_element'
     | 'add_element'
     | 'replace_layout'
-    | 'update_title';
+    | 'update_title'
+    | 'update_conclusion'
+    | 'update_speaker_notes';
   oldValue: unknown;
   newValue: unknown;
   description: string;

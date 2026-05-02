@@ -141,6 +141,38 @@ export function createUpdateTitlePatch(
   };
 }
 
+export function createUpdateConclusionPatch(
+  slideId: string,
+  oldConclusion: string,
+  newConclusion: string
+): EditPatch {
+  return {
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    slideId,
+    operation: 'update_conclusion',
+    oldValue: oldConclusion,
+    newValue: newConclusion,
+    description: `修改结论: "${oldConclusion.slice(0, 30)}" → "${newConclusion.slice(0, 30)}"`,
+  };
+}
+
+export function createUpdateSpeakerNotesPatch(
+  slideId: string,
+  oldNotes: string,
+  newNotes: string
+): EditPatch {
+  return {
+    id: crypto.randomUUID(),
+    timestamp: Date.now(),
+    slideId,
+    operation: 'update_speaker_notes',
+    oldValue: oldNotes,
+    newValue: newNotes,
+    description: '修改讲稿备注',
+  };
+}
+
 // ============ 应用/反转补丁 ============
 
 /**
@@ -241,6 +273,20 @@ function applyPatchToSlide(slide: Slide, patch: EditPatch, reverse: boolean): Sl
         ? (patch.oldValue as string)
         : (patch.newValue as string);
       return { ...slide, title };
+    }
+
+    case 'update_conclusion': {
+      const conclusion = reverse
+        ? (patch.oldValue as string)
+        : (patch.newValue as string);
+      return { ...slide, mainConclusion: conclusion };
+    }
+
+    case 'update_speaker_notes': {
+      const notes = reverse
+        ? (patch.oldValue as string)
+        : (patch.newValue as string);
+      return { ...slide, speakerNotes: notes };
     }
 
     default:

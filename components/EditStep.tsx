@@ -15,7 +15,7 @@ import EditStepToolbar, { type EditMode } from './editor/EditStepToolbar';
 import { Slide, PPTJson, ContentBlock } from '@/types';
 import { versionService, projectService, imageService } from '@/lib/db';
 import { resolveProjectStyleConfig } from '@/lib/style-bridge';
-import { createUpdateTextPatch, createMovePatch, createResizePatch, createDeleteElementPatch, createAddElementPatch } from '@/lib/edit-patch';
+import { createUpdateTextPatch, createMovePatch, createResizePatch, createDeleteElementPatch, createAddElementPatch, createUpdateTitlePatch, createUpdateConclusionPatch, createUpdateSpeakerNotesPatch } from '@/lib/edit-patch';
 import { autoFixSlideRealtime } from '@/lib/auto-fixer';
 
 export default function EditStep({ initialMode = 'content' }: { initialMode?: EditMode }) {
@@ -181,7 +181,24 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
   };
 
   const handleSlideUpdate = (updatedSlide: Slide) => {
+    const originalSlide = slides.find(s => s.id === updatedSlide.id);
+    if (!originalSlide) return;
+
+    // Auto-fix before diffing
     const { slide: fixed } = autoFixSlideRealtime(updatedSlide);
+
+    // Push patches for changed slide-level fields
+    if (fixed.title !== originalSlide.title) {
+      pushPatch(createUpdateTitlePatch(fixed.id, originalSlide.title, fixed.title));
+    }
+    if (fixed.mainConclusion !== originalSlide.mainConclusion) {
+      pushPatch(createUpdateConclusionPatch(fixed.id, originalSlide.mainConclusion, fixed.mainConclusion));
+    }
+    if ((fixed.speakerNotes || '') !== (originalSlide.speakerNotes || '')) {
+      pushPatch(createUpdateSpeakerNotesPatch(fixed.id, originalSlide.speakerNotes || '', fixed.speakerNotes || ''));
+    }
+
+    setSaveStatus('unsaved');
     commitSlides(slides.map(s => s.id === fixed.id ? fixed : s));
   };
 
