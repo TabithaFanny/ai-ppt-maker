@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
+import { getAiMode } from '@/lib/api-client';
 
 const NAV_ITEMS = [
   { href: '/', label: '首页' },
@@ -28,6 +29,7 @@ export default function Header({ activeHref }: HeaderProps) {
             <Sparkles size={16} className="text-white" />
           </div>
           <span className="text-base font-semibold text-[#0f172a]">AI PPT Generator</span>
+          <ModeBadge />
         </div>
         <nav className="flex items-center gap-8">
           {NAV_ITEMS.map(({ href, label }) => {
@@ -49,5 +51,20 @@ export default function Header({ activeHref }: HeaderProps) {
         </nav>
       </div>
     </header>
+  );
+}
+
+function ModeBadge() {
+  const mode = getAiMode();
+  const config: Record<string, { label: string; color: string }> = {
+    mock: { label: 'Mock', color: 'bg-yellow-100 text-yellow-700' },
+    real: { label: 'Real', color: 'bg-green-100 text-green-700' },
+    auto: { label: 'Auto', color: 'bg-blue-100 text-blue-700' },
+  };
+  const { label, color } = config[mode] || config.auto;
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>
+      {label}
+    </span>
   );
 }

@@ -157,6 +157,48 @@ export function setStoredApiKeys(keys: { minimax?: string; deepseek?: string; op
   localStorage.setItem('ai-ppt-keys', JSON.stringify(merged));
 }
 
+// ====== 错误消息中文映射 ======
+
+export function getErrorMessage(provider: string, status: number, raw?: string): string {
+  const messages: Record<string, Record<number, string>> = {
+    minimax: {
+      400: '请求格式错误，请检查输入内容',
+      401: 'MiniMax API Key 无效或已过期',
+      403: 'MiniMax API 访问被拒绝',
+      429: 'MiniMax 请求频率超限，请稍后重试',
+      500: 'MiniMax 服务器内部错误',
+      503: 'MiniMax 服务暂不可用',
+    },
+    deepseek: {
+      400: '请求格式错误，请检查输入内容',
+      401: 'DeepSeek API Key 无效或已过期',
+      403: 'DeepSeek API 访问被拒绝',
+      429: 'DeepSeek 请求频率超限，请稍后重试',
+      500: 'DeepSeek 服务器内部错误',
+      503: 'DeepSeek 服务暂不可用',
+    },
+    openai: {
+      400: '请求格式错误，请检查输入内容',
+      401: 'OpenAI/BLT API Key 无效或已过期',
+      403: 'OpenAI/BLT API 访问被拒绝',
+      429: '请求频率超限，请稍后重试',
+      500: 'OpenAI 服务器内部错误',
+      503: 'OpenAI 服务暂不可用',
+    },
+  };
+
+  if (messages[provider]?.[status]) {
+    return messages[provider][status];
+  }
+
+  // 网络错误
+  if (!status) {
+    return `网络连接失败，请检查网络设置`;
+  }
+
+  return `${provider} error ${status}${raw ? ': ' + raw.slice(0, 100) : ''}`;
+}
+
 /**
  * 检查 API key 是否存在（mock 模式下不检查）
  */
@@ -200,7 +242,7 @@ export async function minimaxChat(
   if (!res.ok) throw new AIError({
     provider: 'minimax',
     stage: 'chat',
-    message: `MiniMax error ${res.status}: ${await res.text()}`,
+    message: getErrorMessage('minimax', res.status, await res.text()),
     fallbackUsed: null,
   });
   const data = await res.json();
@@ -246,7 +288,7 @@ export async function deepseekChat(
   if (!res.ok) throw new AIError({
     provider: 'deepseek',
     stage: 'chat',
-    message: `DeepSeek error ${res.status}: ${await res.text()}`,
+    message: getErrorMessage('deepseek', res.status, await res.text()),
     fallbackUsed: null,
   });
   const data = await res.json();
