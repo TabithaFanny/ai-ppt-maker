@@ -27,6 +27,7 @@ export default function GenerateStep() {
   const [modalPageIndex, setModalPageIndex] = useState<number>(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const touchStartX = useRef<number>(0);
   const touchEndX = useRef<number>(0);
 
@@ -181,6 +182,7 @@ export default function GenerateStep() {
     if (!currentProject?.pptJson) return;
 
     setIsGenerating(true);
+    setExporting(true);
     const { pptJson } = currentProject;
 
     try {
@@ -235,6 +237,7 @@ export default function GenerateStep() {
       useToast.getState().show('error', '导出失败，请重试');
     } finally {
       setIsGenerating(false);
+      setExporting(false);
       setProgress({ current: 0, total: 0 });
     }
   };
@@ -451,6 +454,30 @@ export default function GenerateStep() {
           <ChevronRight size={20} />
         </button>
       </div>
+
+      {/* 导出加载遮罩 */}
+      {exporting && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 text-center min-w-[320px]">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full border-4 border-[#e2e8f0] border-t-[#1e40af] animate-spin" />
+            <h3 className="text-lg font-bold text-[#0f172a] mb-2">正在导出 PPTX...</h3>
+            <p className="text-sm text-[#64748b] mb-4">正在生成幻灯片，请稍候</p>
+            {progress.total > 0 && (
+              <div className="space-y-2">
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-[#1e40af] h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-[#94a3b8]">
+                  {progress.current} / {progress.total}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 重生成弹窗 */}
       {showModal && (

@@ -187,6 +187,11 @@ function FileUploadStep({ store }: { store: any }) {
     if (!file) return;
     setUploading(true);
     setError(null);
+    setUploadProgress(0);
+    // Simulate upload progress
+    const progressTimer = setInterval(() => {
+      setUploadProgress((prev) => Math.min(prev + Math.random() * 30, 85));
+    }, 300);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -197,12 +202,13 @@ function FileUploadStep({ store }: { store: any }) {
         await projectService.update(currentProject.id, { templateFileId: data.fileId });
         setCurrentProject({ ...currentProject, templateFileId: data.fileId });
       }
-      setCurrentStep(2);
+      setUploadProgress(100);
+      setTimeout(() => setCurrentStep(2), 400);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败，请重试');
     } finally {
+      clearInterval(progressTimer);
       setUploading(false);
-      setUploadProgress(100);
     }
   };
 
@@ -212,6 +218,10 @@ function FileUploadStep({ store }: { store: any }) {
     if (!file) return;
     setUploading(true);
     setError(null);
+    setUploadProgress(0);
+    const progressTimer = setInterval(() => {
+      setUploadProgress((prev) => Math.min(prev + Math.random() * 30, 85));
+    }, 300);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -222,10 +232,12 @@ function FileUploadStep({ store }: { store: any }) {
         await projectService.update(currentProject.id, { templateFileId: data.fileId });
         setCurrentProject({ ...currentProject, templateFileId: data.fileId });
       }
-      setCurrentStep(2);
+      setUploadProgress(100);
+      setTimeout(() => setCurrentStep(2), 400);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败，请重试');
     } finally {
+      clearInterval(progressTimer);
       setUploading(false);
     }
   };
