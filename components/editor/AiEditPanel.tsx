@@ -186,10 +186,10 @@ export default function AiEditPanel({ currentSlide, pptJson, onApplyPatch, onIns
     if (!rewriteResult) return;
     const rawValue = rewriteResult.newValue;
     // 安全转换：支持 string / { title: string } / object
-    const titleValue = typeof rawValue === 'string'
+    const titleValue: string = typeof rawValue === 'string'
       ? rawValue
       : (rawValue && typeof rawValue === 'object' && 'title' in (rawValue as object))
-        ? (rawValue as { title: string }).title
+        ? String((rawValue as Record<string, unknown>).title ?? '')
         : currentSlide.title;
     const finalTitle = titleValue || currentSlide.title;
     const titlePatch: EditPatch = {

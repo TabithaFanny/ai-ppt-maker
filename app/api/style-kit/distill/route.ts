@@ -229,8 +229,9 @@ ${styleDNAContext}
       return validation.data;
     }, 3, 'distillStyleKit');
 
-    const styleKitId = `stylekit-${sourceFileId}-${Date.now()}`;
-    const styleDNAId = `styledna-${sourceFileId}-${Date.now()}`;
+    const now = Date.now();
+    const styleKitId = `stylekit-${sourceFileId}-${now}`;
+    const styleDNAId = `styledna-${sourceFileId}-${now}`;
     const styleKit = {
       id: styleKitId,
       name: styleKitName || result.name,
