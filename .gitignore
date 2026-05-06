@@ -41,8 +41,21 @@ yarn-error.log*
 # vercel
 .vercel
 
+# e2e
+/e2e/test-results/
+/e2e/playwright-report/
+/test-results/
+/playwright-report/
+
+# local uploaded source files
+/uploads/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
 .night-shift/
+
+# Python venv for editable-ppt renderer
+scripts/.venv/
+scripts/test-manifest.json

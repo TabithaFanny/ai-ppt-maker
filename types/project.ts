@@ -5,7 +5,7 @@
 // 反馈系统类型 — UserModification, LearnedAdjustment, GenerationFeedback
 // 异步任务类型 — AnalysisJob, SlideImage, JobStatus
 
-import type { SlideRole, LayoutPattern, StyleDNA, SlideRoleDefinition, ContentRules, ScenarioAdapter } from './stylekit';
+import type { LayoutPattern, StyleDNA } from './stylekit';
 import type { SlideElement, ContentBlock } from './elements';
 import type { DeckPlan } from './generation';
 

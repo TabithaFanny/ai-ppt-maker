@@ -1,4 +1,4 @@
-import { Slide, PPTJson, ContentBlock } from '@/types';
+import { Slide, PPTJson } from '@/types';
 
 // Residual check types
 export interface ResidualCheck {

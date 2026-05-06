@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { generateImage } from '@/lib/gpt-image';
 import { ok, fail } from '@/lib/api-response';
+import { rateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 
 export interface GenerateImageRequest {
   prompt: string;
@@ -10,6 +11,12 @@ export interface GenerateImageRequest {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = rateLimit(ip, RATE_LIMITS.image);
+  if (!rl.allowed) {
+    return fail('图片生成请求过于频繁，请稍后重试', 429);
+  }
+
   try {
     const body = (await request.json()) as GenerateImageRequest;
     const { prompt, model = 'gpt-image-2', size = '1792x1024', response_format = 'url' } = body;

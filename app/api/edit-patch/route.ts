@@ -9,6 +9,9 @@ import { chatCompletion, isMockMode } from '@/lib/api-client';
 import { EditPatchSchema, validateAIOutput } from '@/lib/schemas';
 import { mockEditPatch } from '@/lib/ai-mock-data';
 import { ok, fail } from '@/lib/api-response';
+import { rateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
+import { requireApiKey } from '@/lib/require-api-key';
+import { sanitizeInstruction, sanitizePromptString, MAX_PROMPT_LENGTH, containsInjectionPattern } from '@/lib/sanitize';
 import type { Slide } from '@/types';
 
 const MAX_RETRIES = 1;
@@ -137,19 +140,38 @@ function tryParseAndValidate(jsonStr: string, slideId: string) {
 }
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rl = rateLimit(ip, RATE_LIMITS.ai);
+  if (!rl.allowed) {
+    return fail('请求过于频繁，请稍后重试', 429);
+  }
+
+  // API Key 守卫
+  const keyCheck = requireApiKey();
+  if (!('ok' in keyCheck)) return keyCheck;
+
   try {
     const body = await request.json();
-    const { slide, instruction, rewriteMode, customInstruction } = body as {
+    const { slide, instruction: rawInstruction, rewriteMode, customInstruction: rawCustomInstruction } = body as {
       slide: Slide; instruction: string;
       rewriteMode?: string; customInstruction?: string;
     };
 
-    if (!slide || !instruction) {
+    if (!slide || !rawInstruction) {
       return fail('缺少 slide 或 instruction 参数', 400);
     }
 
-    if (!instruction.trim()) {
+    // 净化输入
+    const instruction = sanitizeInstruction(rawInstruction);
+    const customInstruction = rawCustomInstruction ? sanitizePromptString(rawCustomInstruction, MAX_PROMPT_LENGTH) : undefined;
+
+    if (!instruction) {
       return fail('修改指令不能为空', 400);
+    }
+
+    // 拒绝已知的 injection 模式
+    if (containsInjectionPattern(rawInstruction)) {
+      return fail('指令包含不支持的内容', 400);
     }
 
     // AI_MOCK=true 直接返回 mock patch

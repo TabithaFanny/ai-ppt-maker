@@ -5,6 +5,7 @@
  * 替代 GenerateStep 中的硬编码预览
  */
 
+import Image from 'next/image';
 import { Slide, StyleKit, StyleConfig } from '@/types';
 import { styleKitToCSSVars } from '@/lib/render-style';
 
@@ -126,10 +127,12 @@ function SlideBlock({ block }: { block: Slide['content'][0] }) {
       return (
         <div style={baseStyle}>
           {block.content ? (
-            <img
+            <Image
               src={block.content}
               alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 'var(--sk-border-radius, 4px)' }}
+              fill
+              style={{ objectFit: 'cover', borderRadius: 'var(--sk-border-radius, 4px)' }}
+              unoptimized
             />
           ) : (
             <div style={{

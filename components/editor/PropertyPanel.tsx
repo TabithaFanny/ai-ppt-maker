@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ContentBlock } from '@/types';
 import { useElementSelection } from '@/hooks/useElementSelection';
-import { X, Trash2, Lock, Unlock, Palette, Type, Square, ToggleLeft, Grip, AlertCircle } from 'lucide-react';
+import { Trash2, Lock, Unlock, Palette, Type, Square, ToggleLeft, Grip, AlertCircle } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import type { StyleDNA } from '@/types/stylekit';
 
@@ -53,9 +53,7 @@ export default function PropertyPanel({ slideId, blocks, onUpdate, onDelete }: P
 
   const selectedBlock = selectedElement?.slideId === slideId
     ? blocks.find(b => b.id === selectedElement.elementId)
-    : null;
-
-  useEffect(() => {
+    : null;  useEffect(() => {
     if (selectedBlock) {
       setLocalBlock(selectedBlock);
     } else {
@@ -76,10 +74,10 @@ export default function PropertyPanel({ slideId, blocks, onUpdate, onDelete }: P
     if (!currentStyleKit || !dna) return;
     // StyleDNA 全为 plain JSON（字符串/数字/布尔/对象/数组），可用 JSON.parse/stringify 深拷贝
     const newStyleDNA: StyleDNA = JSON.parse(JSON.stringify(dna));
-    let obj: Record<string, any> = newStyleDNA;
+    let obj = newStyleDNA as unknown as Record<string, unknown>;
     for (let i = 0; i < path.length - 1; i++) {
       if (!obj[path[i]]) obj[path[i]] = {};
-      obj = obj[path[i]] as Record<string, any>;
+      obj = obj[path[i]] as Record<string, unknown>;
     }
     obj[path[path.length - 1]] = value;
     newStyleDNA.updatedAt = Date.now();
@@ -354,7 +352,7 @@ export default function PropertyPanel({ slideId, blocks, onUpdate, onDelete }: P
                   onClick={() => {
                     if (currentStyleKit) {
                       const resetDNA = { ...currentStyleKit.styleDNA, ...DEFAULT_STYLE_DNA, updatedAt: Date.now() };
-                      updateStyleKit(currentStyleKit.id, { styleDNA: resetDNA as any });
+                      updateStyleKit(currentStyleKit.id, { styleDNA: resetDNA });
                     }
                   }}
                   className="flex-1 px-2 py-1.5 text-xs border rounded hover:bg-white transition-colors"

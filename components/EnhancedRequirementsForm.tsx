@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '@/lib/store';
-import { UserInput, ScenarioType, AudienceType, VisualPreference, PageRecommendation } from '@/types';
-import { projectService } from '@/lib/db';
+import { UserInput, ScenarioType, AudienceType, VisualPreference } from '@/types';
 import { Plus, X, Sparkles, ArrowRight, ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { isMockMode } from '@/lib/api-client';
 import { mockPPTJson } from '@/lib/ai-mock-data';
@@ -91,6 +90,7 @@ export default function EnhancedRequirementsForm() {
   }, [formData]);
 
   // 初始化
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (currentProject?.userInput) {
       const ui = currentProject.userInput;
@@ -104,6 +104,7 @@ export default function EnhancedRequirementsForm() {
       setManualPrompt(initialPrompt);
     }
   }, []);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const activePrompt = promptTouchedByUser ? manualPrompt : generatedPrompt;
 
@@ -212,7 +213,7 @@ export default function EnhancedRequirementsForm() {
           </div>
           <h3 className="text-lg font-semibold text-[#0f172a] mb-3">正在生成你的 PPT 内容</h3>
           <div className="space-y-2 mb-6">
-            {['正在生成大纲', '正在生成页面内容', '正在整理版式', '即将进入编辑器'].map((s, i) => (
+            {['正在生成大纲', '正在生成页面内容', '正在整理版式', '即将进入编辑器'].map((s) => (
               <div key={s} className={`flex items-center gap-2 text-sm ${genStatus.includes(s.slice(0, 4)) ? 'text-[#1e40af] font-medium' : 'text-gray-400'}`}>
                 <div className={`w-2 h-2 rounded-full ${genStatus.includes(s.slice(0, 4)) ? 'bg-[#1e40af] animate-pulse' : 'bg-gray-200'}`} />
                 {s}
@@ -239,31 +240,31 @@ export default function EnhancedRequirementsForm() {
 
           {/* 主题 */}
           <section>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">PPT 主题 <span className="text-red-500">*</span></label>
-            <input type="text" value={formData.topic} onChange={e => setFormData({ ...formData, topic: e.target.value })}
+            <label htmlFor="ppt-topic" className="block text-sm font-medium text-gray-700 mb-1.5">PPT 主题 <span className="text-red-500">*</span></label>
+            <input id="ppt-topic" type="text" value={formData.topic} onChange={e => setFormData({ ...formData, topic: e.target.value })}
               placeholder="例如：社区治理 AI 平台解决方案介绍"
               className="w-full px-4 py-2.5 border border-[#e2e8f0] rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm" />
-            {errors.topic && <p className="text-xs text-red-500 mt-1">{errors.topic}</p>}
+            {errors.topic && <p role="alert" className="text-xs text-red-500 mt-1">{errors.topic}</p>}
           </section>
 
           {/* 面向对象 */}
-          <section>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">面向对象</label>
-            <div className="flex flex-wrap gap-2">
+          <section aria-labelledby="audience-label">
+            <label id="audience-label" className="block text-sm font-medium text-gray-700 mb-1.5">面向对象</label>
+            <div role="radiogroup" aria-labelledby="audience-label" className="flex flex-wrap gap-2">
               {AUDIENCES.map(a => (
                 <button key={a.value} onClick={() => setFormData({ ...formData, audience: a.value })}
-                  className={`px-3 py-1.5 text-xs rounded-full border transition ${formData.audience === a.value ? 'border-[#1e40af] bg-blue-50 text-[#1e40af]' : 'border-[#e2e8f0] text-gray-600 hover:border-gray-300'}`}>{a.label}</button>
+                  className={`min-h-[44px] px-3 py-1.5 text-xs rounded-full border transition ${formData.audience === a.value ? 'border-[#1e40af] bg-blue-50 text-[#1e40af]' : 'border-[#e2e8f0] text-gray-600 hover:border-gray-300'}`}>{a.label}</button>
               ))}
             </div>
           </section>
 
           {/* 使用目标 */}
-          <section>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">使用目标</label>
-            <div className="grid grid-cols-2 gap-2">
+          <section aria-labelledby="scenario-label">
+            <label id="scenario-label" className="block text-sm font-medium text-gray-700 mb-1.5">使用目标</label>
+            <div role="radiogroup" aria-labelledby="scenario-label" className="grid grid-cols-2 gap-2">
               {SCENARIOS.slice(0, 6).map(s => (
                 <button key={s.value} onClick={() => setFormData({ ...formData, scenario: s.value })}
-                  className={`p-2.5 border rounded-xl text-left text-xs transition ${formData.scenario === s.value ? 'border-[#1e40af] bg-blue-50' : 'border-[#e2e8f0] hover:border-gray-300'}`}>
+                  className={`min-h-[44px] p-2.5 border rounded-xl text-left text-xs transition ${formData.scenario === s.value ? 'border-[#1e40af] bg-blue-50' : 'border-[#e2e8f0] hover:border-gray-300'}`}>
                   <div className="font-medium text-gray-900">{s.label}</div>
                   <div className="text-gray-500 mt-0.5">{s.description}</div>
                 </button>
@@ -273,30 +274,30 @@ export default function EnhancedRequirementsForm() {
 
           {/* 页数 */}
           <section>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">页数</label>
-            <input type="range" min="5" max="50" value={formData.pageCount} onChange={e => setFormData({ ...formData, pageCount: Number(e.target.value) })} className="w-full" />
+            <label htmlFor="page-count" className="block text-sm font-medium text-gray-700 mb-1.5">页数</label>
+            <input id="page-count" type="range" min="5" max="50" value={formData.pageCount} onChange={e => setFormData({ ...formData, pageCount: Number(e.target.value) })} className="w-full" />
             <div className="flex justify-between text-xs text-gray-500"><span>5</span><span className="font-medium text-gray-900">{formData.pageCount} 页</span><span>50</span></div>
           </section>
 
           {/* 关键内容点 */}
           <section>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">关键内容点 <span className="text-red-500">*</span></label>
-            <div className="space-y-2">
+            <label id="keypoints-label" className="block text-sm font-medium text-gray-700 mb-1.5">关键内容点 <span className="text-red-500">*</span></label>
+            <div role="group" aria-labelledby="keypoints-label" className="space-y-2">
               {formData.keyPoints.map((p, i) => (
                 <div key={i} className="flex gap-2">
-                  <input type="text" value={p} onChange={e => updateKeyPoint(i, e.target.value)} placeholder={`要点 ${i + 1}`}
+                  <input id={`keypoint-${i}`} type="text" value={p} onChange={e => updateKeyPoint(i, e.target.value)} placeholder={`要点 ${i + 1}`}
                     className="flex-1 px-3 py-2 border border-[#e2e8f0] rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                   {formData.keyPoints.length > 1 && <button onClick={() => removeKeyPoint(i)} className="p-2 text-gray-400 hover:text-red-500"><X size={16} /></button>}
                 </div>
               ))}
             </div>
-            <button onClick={addKeyPoint} className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg mt-2"><Plus size={14} />添加要点</button>
+            <button onClick={addKeyPoint} className="flex items-center gap-1 min-h-[44px] px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded-lg mt-2"><Plus size={14} />添加要点</button>
           </section>
 
           {/* 导航按钮 */}
           <div className="flex gap-3 pt-4">
-            <button onClick={() => setCurrentStep(2)} className="flex items-center gap-1.5 px-4 py-2.5 border border-[#e2e8f0] rounded-xl hover:bg-gray-50 text-sm"><ArrowLeft size={16} />上一步</button>
-            <button onClick={handleSubmit} className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-[#1e40af] text-white text-sm font-medium rounded-xl hover:bg-[#1e40af]/90">下一步：编辑内容<ArrowRight size={16} /></button>
+            <button onClick={() => setCurrentStep(2)} className="flex items-center gap-1.5 min-h-[44px] px-4 py-2.5 border border-[#e2e8f0] rounded-xl hover:bg-gray-50 text-sm"><ArrowLeft size={16} />上一步</button>
+            <button onClick={handleSubmit} className="flex-1 flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-2.5 bg-[#1e40af] text-white text-sm font-medium rounded-xl hover:bg-[#1e40af]/90">下一步：编辑内容<ArrowRight size={16} /></button>
           </div>
         </div>
 
@@ -318,7 +319,9 @@ export default function EnhancedRequirementsForm() {
               </div>
             )}
 
+            <label htmlFor="ai-prompt" className="sr-only">AI 提示词</label>
             <textarea
+              id="ai-prompt"
               ref={manualPromptRef}
               value={activePrompt}
               onChange={e => handlePromptEdit(e.target.value)}

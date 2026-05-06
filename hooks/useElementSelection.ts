@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { ContentBlock } from '@/types';
 
 export interface ElementSelection {
   slideId: string;

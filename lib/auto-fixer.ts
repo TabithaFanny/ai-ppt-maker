@@ -3,9 +3,8 @@
  * 对 RenderSpec 中的可修复问题进行自动修复
  */
 
-import type { PPTJson, Slide, ContentBlock, StyleConfig } from '@/types';
+import type { PPTJson, Slide } from '@/types';
 import type { ResidualIssue } from '@/types/generation';
-import type { StyleKit } from '@/types';
 
 /** 修复结果 */
 export interface FixResult {

@@ -105,7 +105,20 @@ export type SlideRole =
   | 'quote'
   | 'comparison'
   | 'summary'
-  | 'closing';
+  | 'closing'
+  // 新增：AI PPT 助手支持的角色
+  | 'agenda'
+  | 'background'
+  | 'problem'
+  | 'insight'
+  | 'solution'
+  | 'architecture'
+  | 'feature'
+  | 'workflow'
+  | 'case'
+  | 'data'
+  | 'business'
+  | 'team';
 
 export interface ContentElement {
   type: 'heading' | 'paragraph' | 'bullet-list' | 'image' | 'chart' | 'icon' | 'decoration' | 'caption';

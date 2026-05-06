@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { withRetry, visionCompletion, isMockMode } from '@/lib/api-client';
+import { minimaxVisionChat, isMockMode } from '@/lib/api-client';
 import { mockStyleKitExtractResponse } from '@/lib/ai-mock-data';
 import { ok, fail } from '@/lib/api-response';
 
@@ -35,6 +35,7 @@ interface StyleDNAResult {
     subtitleSize: number;
     bodySize: number;
     captionSize: number;
+    titleWeight: number;
   };
   spacing: {
     slidePadding: number;
@@ -98,6 +99,7 @@ function extractStyleDNAFromXML(
       titleFont: fontInfo?.titleFont || 'Arial',
       bodyFont: fontInfo?.bodyFont || 'Helvetica',
       titleSize: 44,
+      titleWeight: 700,
       subtitleSize: 28,
       bodySize: 18,
       captionSize: 14,
@@ -135,6 +137,7 @@ async function extractStyleDNAFromImage(imageBase64: string): Promise<Omit<Style
 
 **Typography System**:
 - Title font family and approximate size (pt)
+- Title font weight (100-900 scale: 300=light, 400=normal, 500=medium, 600=semibold, 700=bold, 800=extrabold, 900=black)
 - Subtitle font family and size
 - Body font family and size
 - Caption/footnote font and size
@@ -178,6 +181,7 @@ Respond ONLY in English with this exact JSON format - no additional text:
     "titleFont": "FontName",
     "bodyFont": "FontName",
     "titleSize": 44,
+    "titleWeight": 700,
     "subtitleSize": 28,
     "bodySize": 18,
     "captionSize": 14
@@ -201,13 +205,20 @@ Respond ONLY in English with this exact JSON format - no additional text:
 }
 \`\`\``;
 
-  const content = await visionCompletion(prompt, imageBase64);
-  const text = content.replace(/```json\n?|\n?```/g, '').trim();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 55_000);
 
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Failed to parse API response: ${text.slice(0, 200)}`);
+    const content = await minimaxVisionChat(prompt, imageBase64, { signal: controller.signal });
+    const text = content.replace(/```json\n?|\n?```/g, '').trim();
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Failed to parse API response: ${text.slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -260,16 +271,12 @@ export async function POST(request: NextRequest) {
 
     const MAX_TIMEOUT_MS = 60_000;
 
-    const styleDNAResults: StyleDNAResult[] = [];
-    let hadFailures = false;
-
-    for (const slide of slidesToProcess) {
-      console.log(`[StyleKit Extract] Processing slide ${slide.slideIndex}`);
-      try {
+    const results = await Promise.allSettled(
+      slidesToProcess.map(async (slide) => {
+        console.log(`[StyleKit Extract] Processing slide ${slide.slideIndex}`);
         let result: Omit<StyleDNAResult, 'id' | 'slideIndex'>;
 
         if (slide.imageBase64) {
-          // Timeout per slide
           const timeoutPromise = new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Per-slide timeout')), MAX_TIMEOUT_MS)
           );
@@ -285,15 +292,22 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        styleDNAResults.push({
+        return {
           id: `${sourceFileId}-slide-${slide.slideIndex}`,
           slideIndex: slide.slideIndex,
           ...result,
-        });
-      } catch (err) {
+        };
+      })
+    );
+
+    const styleDNAResults: StyleDNAResult[] = [];
+    let hadFailures = false;
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        styleDNAResults.push(r.value);
+      } else {
         hadFailures = true;
-        console.warn(`[StyleKit Extract] Slide ${slide.slideIndex} failed, skipping:`, err);
-        // 跳过失败页，继续处理下一页
+        console.warn('[StyleKit Extract] Slide failed, skipping:', r.reason);
       }
     }
 

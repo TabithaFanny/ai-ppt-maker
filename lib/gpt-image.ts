@@ -155,4 +155,4 @@ export async function fetchImageAsBase64(imageUrl: string): Promise<string | nul
 }
 
 // Helper function
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

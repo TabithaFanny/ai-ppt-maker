@@ -9,7 +9,6 @@
 
 import JSZip from 'jszip';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
 
 export interface SlideContent {
   slideIndex: number;

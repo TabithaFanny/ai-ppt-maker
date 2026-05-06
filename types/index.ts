@@ -11,3 +11,6 @@ export * from './project';
 
 // 生成管道类型
 export * from './generation';
+
+// 工作台类型
+export * from './workbench';

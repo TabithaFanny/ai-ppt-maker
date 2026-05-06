@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { StyleKit, LayoutPattern } from '@/types';
+import { StyleKit } from '@/types';
 import { CheckCircle, Palette, Type, Layout, Sparkles, Clock, X, Image, RefreshCw, AlertTriangle, Info } from 'lucide-react';
+import NextImage from 'next/image';
 import { generateImage } from '@/lib/gpt-image';
 import { isMockMode } from '@/lib/api-client';
 
@@ -52,7 +53,6 @@ function ColorSwatch({ hex, label }: { hex: string; label: string }) {
 
 export default function StyleKitReport({
   styleKit,
-  totalSlides,
   onConfirm,
   onCancel,
   onRetry,
@@ -254,7 +254,7 @@ export default function StyleKitReport({
             disabled={isGeneratingPreview}
             className="flex items-center gap-2 px-5 py-2.5 border border-[#e2e8f0] text-gray-700 rounded-xl hover:bg-gray-100 text-sm font-medium transition-colors disabled:opacity-60"
           >
-            <Image size={16} />
+            <Image size={16} aria-hidden="true" />
             {isGeneratingPreview ? '生成中...' : '预览封面风格'}
           </button>
           <button
@@ -283,8 +283,8 @@ export default function StyleKitReport({
 
             <div className="px-6 py-4">
               {previewUrl ? (
-                <div className="aspect-video bg-gradient-to-br from-[#1e40af] to-[#2563eb] rounded-xl flex items-center justify-center overflow-hidden">
-                  <img src={previewUrl} alt="封面预览" className="w-full h-full object-cover" />
+                <div className="aspect-video bg-gradient-to-br from-[#1e40af] to-[#2563eb] rounded-xl flex items-center justify-center overflow-hidden relative">
+                  <NextImage src={previewUrl} alt="封面预览" fill className="object-cover" unoptimized />
                 </div>
               ) : (
                 <div className="aspect-video bg-gradient-to-br from-[#1e40af] to-[#2563eb] rounded-xl flex items-center justify-center">

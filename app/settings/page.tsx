@@ -1,102 +1,67 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Sparkles, Save, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Save, Check, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import Header from '@/components/shell/Header';
-import { getAiMode, setAiMode, getStoredApiKeys, setStoredApiKeys, isMockMode } from '@/lib/api-client';
-
-type AiMode = 'mock' | 'real' | 'auto';
+import { getStoredApiKeys, setStoredApiKeys, initEncryptedKeys } from '@/lib/api-client';
 
 export default function SettingsPage() {
-  const [mode, setMode] = useState<AiMode>('mock');
-  const [keys, setKeys] = useState({ minimax: '', deepseek: '', openai: '' });
+  const [keys, setKeys] = useState(() => getStoredApiKeys());
   const [showKeys, setShowKeys] = useState({ minimax: false, deepseek: false, openai: false });
   const [saved, setSaved] = useState(false);
-  const [envKeys, setEnvKeys] = useState({ minimax: !!process.env.NEXT_PUBLIC_MINIMAX_API_KEY, deepseek: !!process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY, openai: !!process.env.NEXT_PUBLIC_OPENAI_API_KEY });
 
+  // 初始化加密 key 存储（迁移明文 → 加密，解密到缓存）
   useEffect(() => {
-    setMode(getAiMode());
-    setKeys(getStoredApiKeys());
+    initEncryptedKeys().then(() => {
+      setKeys(getStoredApiKeys());
+    });
   }, []);
 
   const handleSave = () => {
-    setAiMode(mode);
     setStoredApiKeys(keys);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const modeDescriptions: Record<AiMode, { title: string; desc: string }> = {
-    mock: { title: 'Mock 模式', desc: '使用模拟数据运行，无需任何 API Key。适合演示和开发测试。' },
-    real: { title: 'Real 模式', desc: '使用真实 API Key 调用 AI 服务。需要配置下方 API Key 或环境变量。' },
-    auto: { title: 'Auto 模式', desc: '有 API Key 时使用真实调用，无 Key 时自动回退到 Mock 模式。' },
+  const envKeys = {
+    minimax: !!process.env.NEXT_PUBLIC_MINIMAX_API_KEY,
+    deepseek: !!process.env.NEXT_PUBLIC_DEEPSEEK_API_KEY,
+    openai: !!process.env.NEXT_PUBLIC_OPENAI_API_KEY,
   };
-
   const hasEnvKeys = envKeys.minimax || envKeys.deepseek || envKeys.openai;
-  const hasStoredKeys = !!(keys.minimax || keys.deepseek || keys.openai);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-[var(--color-surface)]">
       <Header />
 
       {/* 主体 */}
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold text-[#0f172a] mb-2">设置</h1>
-        <p className="text-sm text-[#64748b] mb-8">配置 API Key 和 AI 运行模式</p>
+      <main className="mx-auto max-w-4xl px-4 py-8 md:px-8 md:py-10">
+        <div className="mb-8 rounded-[28px] border border-[#e2e8f0] bg-gradient-to-br from-white via-[#f8fbff] to-[#eff6ff] p-6 shadow-[0_16px_40px_rgba(15,23,42,0.08)] md:p-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#bfdbfe] bg-white px-3 py-1 text-[11px] font-medium text-[#1d4ed8] shadow-sm">
+            <Save size={12} />
+            运行模式与 API 设置
+          </div>
+          <h1 className="mt-4 text-3xl font-bold text-[#0f172a] md:text-4xl">设置</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#64748b]">
+            管理 API Key 配置，确保 AI 服务正常运行。
+          </p>
+        </div>
 
         {/* 当前状态 */}
-        <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-[#0f172a]">当前状态</span>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-              isMockMode() ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-            }`}>
-              {isMockMode() ? 'Mock 模式' : 'Real 模式'}
-            </span>
+        {hasEnvKeys && (
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Check size={16} className="text-green-600" />
+              <span className="text-sm font-medium text-green-800">API Key 已通过环境变量配置（服务端生效）</span>
+            </div>
           </div>
-          {hasEnvKeys && (
-            <p className="text-xs text-[#94a3b8] mt-2">
-              检测到环境变量中已配置 API Key（服务端生效）
-            </p>
-          )}
-        </div>
-
-        {/* 模式选择 */}
-        <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm p-6 mb-6">
-          <h2 className="text-base font-semibold text-[#0f172a] mb-4">AI 运行模式</h2>
-          <div className="space-y-3">
-            {(['mock', 'real', 'auto'] as AiMode[]).map((m) => (
-              <label
-                key={m}
-                className={`block p-4 rounded-xl border cursor-pointer transition-colors ${
-                  mode === m ? 'border-[#1e40af] bg-[#1e40af]/5' : 'border-[#e2e8f0] hover:border-[#94a3b8]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="radio"
-                    name="ai-mode"
-                    value={m}
-                    checked={mode === m}
-                    onChange={() => setMode(m)}
-                    className="mt-1 accent-[#1e40af]"
-                  />
-                  <div>
-                    <div className="text-sm font-medium text-[#0f172a]">{modeDescriptions[m].title}</div>
-                    <div className="text-xs text-[#64748b] mt-0.5">{modeDescriptions[m].desc}</div>
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* API Key 配置 */}
-        <div className="bg-white rounded-xl border border-[#e2e8f0] shadow-sm p-6 mb-6">
+        <div className="mb-6 rounded-2xl border border-[#e2e8f0] bg-white p-6 shadow-sm">
           <h2 className="text-base font-semibold text-[#0f172a] mb-1">API Key 配置</h2>
           <p className="text-xs text-[#94a3b8] mb-4">
-            配置后保存在浏览器本地存储。服务端 API 路由优先使用环境变量中的 Key。
+            本页保存的 Key 仅存储在当前浏览器，用于本地模式判断与兼容旧流程；服务端 API 路由仍需要环境变量中的 Key 才能稳定工作。
           </p>
 
           <div className="space-y-4">
@@ -131,40 +96,40 @@ export default function SettingsPage() {
         </div>
 
         {/* 保存按钮 */}
-        <button
-          onClick={handleSave}
-          className="w-full px-4 py-3 bg-[#1e40af] text-white text-sm font-medium rounded-xl hover:bg-[#1e40af]/90 transition-colors flex items-center justify-center gap-2"
-        >
-          {saved ? (
-            <><Check size={16} /> 已保存</>
-          ) : (
-            <><Save size={16} /> 保存设置</>
-          )}
-        </button>
+        <div className="rounded-2xl border border-[#dbeafe] bg-white p-4 shadow-sm">
+          <button
+            onClick={handleSave}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#1e40af] px-4 py-3 text-sm font-medium text-white shadow-[0_10px_24px_rgba(37,99,235,0.24)] transition-colors hover:bg-[#1e40af]/90"
+          >
+            {saved ? (
+              <><Check size={16} /> 已保存</>
+            ) : (
+              <><Save size={16} /> 保存设置</>
+            )}
+          </button>
+        </div>
 
         {/* 提示 */}
-        <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+        <div className="mt-6 rounded-2xl border border-[#dbeafe] bg-[#eff6ff] p-4">
           <div className="flex items-start gap-2">
-            <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-800">
-              <p className="font-medium mb-1">说明</p>
+            <AlertCircle size={16} className="text-[#1d4ed8] shrink-0 mt-0.5" />
+            <div className="text-xs text-[#475569]">
+              <p className="font-medium mb-1 text-[#1d4ed8]">说明</p>
               <ul className="list-disc list-inside space-y-1">
                 <li>API Key 仅存储在浏览器本地，不会上传到服务器</li>
-                <li>服务端 API 路由优先读取环境变量中的 Key</li>
-                <li>Mock 模式无需任何配置即可运行全部功能</li>
-                <li>Auto 模式会智能切换：有 Key 用 real，无 Key 回退 mock</li>
+                <li>服务端 AI 路由需要环境变量中的 Key 才能正常工作</li>
               </ul>
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
 function ApiKeyInput({
   label,
-  provider,
+  provider: _provider,
   value,
   hasEnv,
   show,
@@ -181,7 +146,7 @@ function ApiKeyInput({
 }) {
   return (
     <div>
-      <label className="flex items-center gap-2 text-sm font-medium text-[#0f172a] mb-1.5">
+      <label htmlFor={`api-key-${_provider}`} className="flex items-center gap-2 text-sm font-medium text-[#0f172a] mb-1.5">
         {label}
         {hasEnv && (
           <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">环境变量</span>
@@ -189,6 +154,7 @@ function ApiKeyInput({
       </label>
       <div className="relative">
         <input
+          id={`api-key-${_provider}`}
           type={show ? 'text' : 'password'}
           value={value}
           onChange={(e) => onChange(e.target.value)}

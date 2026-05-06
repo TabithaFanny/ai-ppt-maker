@@ -19,6 +19,7 @@ interface SlideStyleDNA {
     titleFont: string;
     bodyFont: string;
     titleSize: number;
+    titleWeight: number;
     subtitleSize: number;
     bodySize: number;
     captionSize: number;
@@ -56,7 +57,7 @@ interface LayoutPatternResult {
   applicableSlides: number[];
 }
 
-interface DistillResponse {
+interface _DistillResponse {
   name: string;
   mood: 'professional' | 'creative' | 'academic' | 'casual';
   moodDescription: string;
@@ -73,6 +74,7 @@ interface DistillResponse {
     titleFont: string;
     bodyFont: string;
     titleSize: number;
+    titleWeight: number;
     subtitleSize: number;
     bodySize: number;
     captionSize: number;
@@ -214,7 +216,7 @@ ${styleDNAContext}
     }
 
     const result = await withRetry(async () => {
-      const response = await deepseekWithFallback([{ role: 'user', content: prompt }]);
+      const response = await deepseekWithFallback([{ role: 'user', content: prompt }], { reasoning: false });
       const text = response.content.replace(/```json\n?|\n?```/g, '').trim();
       let parsed: unknown;
       try {

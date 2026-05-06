@@ -10,9 +10,7 @@ interface SlideEditorProps {
 }
 
 export default function SlideEditor({ slide, onUpdate }: SlideEditorProps) {
-  const [localSlide, setLocalSlide] = useState(slide);
-
-  useEffect(() => {
+  const [localSlide, setLocalSlide] = useState(slide);  useEffect(() => {
     setLocalSlide(slide);
   }, [slide]);
 
@@ -56,8 +54,9 @@ export default function SlideEditor({ slide, onUpdate }: SlideEditorProps) {
       <div className="space-y-4">
         {/* 布局选择 */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium">布局</label>
+          <label htmlFor="slide-layout" className="block text-sm font-medium">布局</label>
           <select
+            id="slide-layout"
             value={localSlide.layout}
             onChange={(e) => updateField('layout', e.target.value)}
             className="w-full px-3 py-2 border rounded"
@@ -72,8 +71,9 @@ export default function SlideEditor({ slide, onUpdate }: SlideEditorProps) {
 
         {/* 标题 */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium">标题</label>
+          <label htmlFor="slide-title" className="block text-sm font-medium">标题</label>
           <input
+            id="slide-title"
             type="text"
             value={localSlide.title}
             onChange={(e) => updateField('title', e.target.value)}
@@ -83,8 +83,9 @@ export default function SlideEditor({ slide, onUpdate }: SlideEditorProps) {
 
         {/* 核心结论 */}
         <div className="space-y-2">
-          <label className="block text-sm font-medium">核心结论</label>
+          <label htmlFor="slide-conclusion" className="block text-sm font-medium">核心结论</label>
           <textarea
+            id="slide-conclusion"
             value={localSlide.mainConclusion}
             onChange={(e) => updateField('mainConclusion', e.target.value)}
             rows={2}
@@ -99,6 +100,7 @@ export default function SlideEditor({ slide, onUpdate }: SlideEditorProps) {
           </summary>
           <p className="text-xs text-gray-400">用于答辩口播，不会直接显示在页面中</p>
           <textarea
+            id="slide-speaker-notes"
             value={localSlide.speakerNotes || ''}
             onChange={(e) => updateField('speakerNotes', e.target.value)}
             rows={3}

@@ -3,8 +3,7 @@
  * 将 StyleKit 数据转换为 CSS 变量和 PPTX 导出配置
  */
 
-import { StyleKit, StyleConfig } from '@/types';
-import { resolveStyleConfig } from './style-bridge';
+import { StyleKit } from '@/types';
 
 /**
  * StyleKit → CSS 变量映射
@@ -54,89 +53,4 @@ export function injectStyleKitCSSVars(element: HTMLElement, styleKit: StyleKit):
   for (const [key, value] of Object.entries(vars)) {
     element.style.setProperty(key, value);
   }
-}
-
-/**
- * 移除 StyleKit CSS 变量
- */
-export function removeStyleKitCSSVars(element: HTMLElement): void {
-  const vars = styleKitToCSSVars({} as StyleKit);
-  for (const key of Object.keys(vars)) {
-    element.style.removeProperty(key);
-  }
-}
-
-/**
- * PPTX 导出配置
- */
-export interface PptxSlideConfig {
-  backgroundColor: string;
-  titleFontFace: string;
-  titleFontSize: number;
-  titleColor: string;
-  titleBold: boolean;
-  bodyFontFace: string;
-  bodyFontSize: number;
-  bodyColor: string;
-  bodyBold: boolean;
-  slidePadding: number;
-  shadow: boolean;
-  borderRadius: number;
-}
-
-/**
- * StyleKit → PPTX 导出配置
- */
-export function styleKitToPptxConfig(styleKit: StyleKit): PptxSlideConfig {
-  const dna = styleKit.styleDNA;
-  return {
-    backgroundColor: dna.palette.background,
-    titleFontFace: dna.typography.titleFont,
-    titleFontSize: dna.typography.titleSize,
-    titleColor: dna.palette.text,
-    titleBold: true,
-    bodyFontFace: dna.typography.bodyFont,
-    bodyFontSize: dna.typography.bodySize,
-    bodyColor: dna.palette.text,
-    bodyBold: false,
-    slidePadding: dna.spacing.slidePadding,
-    shadow: dna.effects.shadowEnabled,
-    borderRadius: dna.effects.borderRadius,
-  };
-}
-
-/**
- * StyleConfig → PPTX 导出配置 (兼容旧路径)
- */
-export function styleConfigToPptxConfig(styleConfig: StyleConfig): PptxSlideConfig {
-  return {
-    backgroundColor: styleConfig.palette.background,
-    titleFontFace: styleConfig.typography.titleFont,
-    titleFontSize: styleConfig.typography.titleSize,
-    titleColor: styleConfig.palette.text,
-    titleBold: true,
-    bodyFontFace: styleConfig.typography.bodyFont,
-    bodyFontSize: styleConfig.typography.bodySize,
-    bodyColor: styleConfig.palette.text,
-    bodyBold: false,
-    slidePadding: styleConfig.layout.padding,
-    shadow: false,
-    borderRadius: 0,
-  };
-}
-
-/**
- * 统一入口：从 StyleKit 或 StyleConfig 获取 PPTX 配置
- */
-export function resolvePptxConfig(options: {
-  styleKit?: StyleKit | null;
-  styleConfig?: StyleConfig | null;
-}): PptxSlideConfig | null {
-  if (options.styleKit) {
-    return styleKitToPptxConfig(options.styleKit);
-  }
-  if (options.styleConfig) {
-    return styleConfigToPptxConfig(options.styleConfig);
-  }
-  return null;
 }

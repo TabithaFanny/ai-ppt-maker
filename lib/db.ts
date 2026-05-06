@@ -1,11 +1,61 @@
 import Dexie, { Table } from 'dexie';
-import { Project, UploadedFile, StyleKit, AnalysisJob, ProjectImage } from '@/types';
+import { Project, UploadedFile, StyleKit, AnalysisJob, ProjectImage, PromptLibrary } from '@/types';
+import type { RefSlidePrompt, GenSlidePrompt, GenSlideResult, WorkbenchMessage, MasterTemplate } from '@/types/workbench';
 
 export interface ProjectVersion {
   id: string;
   projectId: string;
   pptJson: Project['pptJson'];
   createdAt: number;
+}
+
+export interface ProjectAsset {
+  id: string;
+  projectId: string;
+  assetId: string;
+  name: string;
+  type: 'logo' | 'image' | 'icon' | 'photo';
+  url: string;
+  description: string;
+  createdAt: number;
+}
+
+export interface WorkbenchSnapshot {
+  id: string;
+  projectId: string;
+  // Reference slides (thumbnails + metadata) — stores full ReferenceSlide shape
+  referenceSlides: Array<{
+    id: string;
+    slideIndex: number;
+    thumbnailBase64: string;
+    title: string;
+    extractedText: string;
+    slideXML?: string;
+    layoutType: string;
+  }>;
+  // Reference slide prompts (AI analysis results)
+  referenceSlidePrompts: RefSlidePrompt[];
+  // Generated slide prompts (planned pages)
+  generatedSlidePrompts: GenSlidePrompt[];
+  // Generated slide results (images + pptJsonSlides)
+  generatedSlideResults?: GenSlideResult[];
+  // Chat messages
+  workbenchMessages: WorkbenchMessage[];
+  // Selection states
+  selectedRefSlideIndex: number;
+  selectedNewSlideIndex: number;
+  // Extracted document text from uploaded Word/PDF
+  extractedDocumentText: string;
+  // Uploaded documents metadata and extracted text
+  uploadedDocuments?: Array<{ docId: string; name: string; text: string; uploadedAt: number }>;
+  // Master template (cross-slide shared style)
+  masterTemplate?: MasterTemplate | null;
+  // Prompt/template library saved from workbench
+  promptLibrary?: PromptLibrary;
+  // File reference (the original PPT file)
+  referenceFileId: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 class AppDatabase extends Dexie {
@@ -15,6 +65,8 @@ class AppDatabase extends Dexie {
   styleKits!: Table<StyleKit>;
   analysisJobs!: Table<AnalysisJob>;
   projectImages!: Table<ProjectImage>;
+  projectAssets!: Table<ProjectAsset>;
+  workbenchSnapshots!: Table<WorkbenchSnapshot>;
 
   constructor() {
     super('ai-ppt-generator');
@@ -49,6 +101,33 @@ class AppDatabase extends Dexie {
       analysisJobs: 'id, fileId, status, createdAt',
       projectImages: 'id, projectId, slideId, createdAt',
     });
+    this.version(6).stores({
+      projects: 'id, userId, title, status, createdAt, updatedAt',
+      files: 'id, projectId, type, url',
+      versions: 'id, projectId, createdAt',
+      styleKits: 'id, sourceFileId, name, createdAt, updatedAt',
+      analysisJobs: 'id, fileId, status, createdAt',
+      projectImages: 'id, projectId, slideId, createdAt',
+    });
+    this.version(7).stores({
+      projects: 'id, userId, title, status, createdAt, updatedAt',
+      files: 'id, projectId, type, url',
+      versions: 'id, projectId, createdAt',
+      styleKits: 'id, sourceFileId, name, createdAt, updatedAt',
+      analysisJobs: 'id, fileId, status, createdAt',
+      projectImages: 'id, projectId, slideId, createdAt',
+      workbenchSnapshots: 'id, projectId, createdAt',
+    });
+    this.version(8).stores({
+      projects: 'id, userId, title, status, createdAt, updatedAt',
+      files: 'id, projectId, type, url',
+      versions: 'id, projectId, createdAt',
+      styleKits: 'id, sourceFileId, name, createdAt, updatedAt',
+      analysisJobs: 'id, fileId, status, createdAt',
+      projectImages: 'id, projectId, slideId, createdAt',
+      workbenchSnapshots: 'id, projectId, createdAt',
+      projectAssets: 'id, projectId, assetId, type, createdAt',
+    });
   }
 }
 
@@ -65,7 +144,8 @@ export const projectService = {
   },
 
   async getAll() {
-    return db.projects.orderBy('updatedAt').reverse().toArray();
+    const projects = await db.projects.toArray();
+    return projects.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   },
 
   async getById(id: string) {
@@ -78,7 +158,49 @@ export const projectService = {
 
   async delete(id: string) {
     await db.projects.delete(id);
+    await db.versions.where('projectId').equals(id).delete();
+    await db.projectImages.where('projectId').equals(id).delete();
+    await db.projectAssets.where('projectId').equals(id).delete();
+    await db.workbenchSnapshots.where('projectId').equals(id).delete();
     await db.files.where('projectId').equals(id).delete();
+  },
+};
+
+export const workbenchService = {
+  /** Save or update workbench state for a project */
+  async save(projectId: string, data: Omit<WorkbenchSnapshot, 'id' | 'projectId' | 'createdAt' | 'updatedAt'>) {
+    // Try to find existing snapshot for this project
+    const existing = await db.workbenchSnapshots.where('projectId').equals(projectId).first();
+    const now = Date.now();
+
+    if (existing) {
+      await db.workbenchSnapshots.update(existing.id, {
+        ...data,
+        updatedAt: now,
+      });
+      return existing.id;
+    } else {
+      const id = crypto.randomUUID();
+      const snapshot: WorkbenchSnapshot = {
+        id,
+        projectId,
+        ...data,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.workbenchSnapshots.add(snapshot);
+      return id;
+    }
+  },
+
+  /** Load workbench state for a project */
+  async load(projectId: string) {
+    return db.workbenchSnapshots.where('projectId').equals(projectId).first();
+  },
+
+  /** Delete workbench state for a project */
+  async delete(projectId: string) {
+    await db.workbenchSnapshots.where('projectId').equals(projectId).delete();
   },
 };
 
@@ -208,12 +330,14 @@ export const analysisJobService = {
   },
 
   async getLatestByFileId(fileId: string) {
-    const jobs = await db.analysisJobs.where('fileId').equals(fileId).sortBy('updatedAt');
+    const jobs = await db.analysisJobs.where('fileId').equals(fileId).toArray();
+    jobs.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
     return jobs[jobs.length - 1];
   },
 
   async getRecoverableByFileId(fileId: string, pipelineVersion?: string) {
-    const jobs = await db.analysisJobs.where('fileId').equals(fileId).reverse().sortBy('updatedAt');
+    const jobs = await db.analysisJobs.where('fileId').equals(fileId).toArray();
+    jobs.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     return jobs.find((job) => {
       if (pipelineVersion && job.pipelineVersion && job.pipelineVersion !== pipelineVersion) {
         return false;
@@ -306,5 +430,37 @@ export const imageService = {
 
   async deleteByProject(projectId: string) {
     await db.projectImages.where('projectId').equals(projectId).delete();
+  },
+};
+
+// ProjectAsset CRUD
+export const assetService = {
+  async save(asset: Omit<ProjectAsset, 'id' | 'createdAt'>) {
+    const id = crypto.randomUUID();
+    const record: ProjectAsset = { ...asset, id, createdAt: Date.now() };
+    await db.projectAssets.add(record);
+    return record;
+  },
+
+  async getByProject(projectId: string) {
+    return db.projectAssets.where('projectId').equals(projectId).toArray();
+  },
+
+  async delete(id: string) {
+    await db.projectAssets.delete(id);
+  },
+
+  async deleteByProject(projectId: string) {
+    await db.projectAssets.where('projectId').equals(projectId).delete();
+  },
+
+  /** Get next available assetId number (e.g., "01", "02", ...) */
+  async getNextAssetId(projectId: string): Promise<string> {
+    const assets = await db.projectAssets.where('projectId').equals(projectId).toArray();
+    if (assets.length === 0) return '01';
+    const nums = assets
+      .map((a) => parseInt(a.assetId, 10))
+      .filter((n) => !isNaN(n));
+    return String(Math.max(...nums, 0) + 1).padStart(2, '0');
   },
 };

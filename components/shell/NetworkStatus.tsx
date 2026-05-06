@@ -5,10 +5,12 @@ import { WifiOff, Wifi } from 'lucide-react';
 import { logger } from '@/lib/logger';
 
 export default function NetworkStatus() {
+  const [mounted, setMounted] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [showOnline, setShowOnline] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     setIsOnline(navigator.onLine);
 
     const handleOnline = () => {
@@ -33,7 +35,7 @@ export default function NetworkStatus() {
     };
   }, []);
 
-  if (isOnline && !showOnline) return null;
+  if (!mounted || (isOnline && !showOnline)) return null;
 
   return (
     <div

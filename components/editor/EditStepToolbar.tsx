@@ -83,7 +83,7 @@ export default function EditStepToolbar({
           )}
 
           {/* Edit mode tabs */}
-          <div className="hidden md:flex items-center gap-1 ml-4 bg-gray-100 rounded-lg p-1">
+          <div role="tablist" aria-label="编辑模式" className="hidden md:flex items-center gap-1 ml-4 bg-gray-100 rounded-lg p-1">
             {([
               { key: 'content' as EditMode, icon: Layers, label: '内容' },
               { key: 'element' as EditMode, icon: Layout, label: '版式预览' },
@@ -91,6 +91,8 @@ export default function EditStepToolbar({
             ]).map(({ key, icon: Icon, label }) => (
               <button
                 key={key}
+                role="tab"
+                aria-selected={editMode === key}
                 onClick={() => onEditModeChange(key)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm ${
                   editMode === key ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
@@ -106,7 +108,7 @@ export default function EditStepToolbar({
         <div className="hidden md:flex gap-2">
           <button
             onClick={onToggleAssetLibrary}
-            className={`flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 ${
+            className={`flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50 ${
               isAssetLibraryOpen ? 'bg-blue-50 border-blue-300' : ''
             }`}
           >
@@ -116,7 +118,7 @@ export default function EditStepToolbar({
 
           <button
             onClick={onToggleAiEdit}
-            className={`flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 ${
+            className={`flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50 ${
               isAiEditOpen ? 'bg-purple-50 border-purple-300' : ''
             }`}
           >
@@ -143,7 +145,7 @@ export default function EditStepToolbar({
 
           <button
             onClick={onToggleLayoutGuide}
-            className={`flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 ${
+            className={`flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50 ${
               showLayoutGuide ? 'bg-green-50 border-green-300' : ''
             }`}
           >
@@ -153,7 +155,7 @@ export default function EditStepToolbar({
 
           <button
             onClick={onToggleResidual}
-            className={`flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 ${
+            className={`flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50 ${
               isResidualPanelOpen ? 'bg-orange-50 border-orange-300' : ''
             }`}
           >
@@ -165,7 +167,7 @@ export default function EditStepToolbar({
 
           <button
             onClick={onAddSlide}
-            className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50"
+            className="flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50"
           >
             <Plus size={20} />
             添加幻灯片
@@ -173,7 +175,7 @@ export default function EditStepToolbar({
           <button
             onClick={onPreviewSlide}
             disabled={isLoadingPreview}
-            className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+            className="flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
           >
             <Eye size={20} />
             {isLoadingPreview ? '生成中...' : '预览本页'}
@@ -181,7 +183,7 @@ export default function EditStepToolbar({
           <button
             onClick={onGenerateImage}
             disabled={isGeneratingImage}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+            className="flex items-center gap-2 min-h-[44px] px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
           >
             <Wand2 size={20} />
             {isGeneratingImage ? '生成中...' : 'AI 配图'}
@@ -189,7 +191,7 @@ export default function EditStepToolbar({
           <button
             onClick={onDeleteSlide}
             disabled={slidesCount <= 1}
-            className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+            className="flex items-center gap-2 min-h-[44px] px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
           >
             <Trash2 size={20} />
             删除当前页

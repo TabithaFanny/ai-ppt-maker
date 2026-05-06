@@ -2,11 +2,12 @@
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Slide, ContentBlock, StyleKit } from '@/types';
+import type { SlideRole } from '@/types/stylekit';
 import { useElementSelection } from '@/hooks/useElementSelection';
 import { resolveLayoutPlan, snapToZone, findHoveredZone } from '@/lib/layout-resolver';
 import LayoutGuide from './LayoutGuide';
 import { Lock } from 'lucide-react';
-import type { LayoutPlan, ResolvedZone } from '@/types/generation';
+import type { LayoutPlan } from '@/types/generation';
 
 interface ElementCanvasProps {
   slide: Slide;
@@ -17,7 +18,6 @@ interface ElementCanvasProps {
   showLayoutGuide?: boolean;
 }
 
-const HANDLE_SIZE = 8;
 const MIN_SIZE = 0.05;
 
 export default function ElementCanvas({
@@ -49,7 +49,7 @@ export default function ElementCanvas({
   // 计算 LayoutPlan
   const layoutPlan: LayoutPlan | null = useMemo(() => {
     if (!showLayoutGuide) return null;
-    return resolveLayoutPlan(slide.id, slideRole as any, slide.content, styleKit);
+    return resolveLayoutPlan(slide.id, slideRole as SlideRole, slide.content, styleKit);
   }, [slide.id, slideRole, slide.content, styleKit, showLayoutGuide]);
 
   // Convert relative position to pixel position
@@ -66,20 +66,6 @@ export default function ElementCanvas({
     };
   }, []);
 
-  // Convert pixel position to relative position
-  const toRelative = useCallback((pixels: { x: number; y: number; width: number; height: number }) => {
-    const container = canvasRef.current;
-    if (!container) return { x: 0, y: 0, width: 0, height: 0 };
-
-    const rect = container.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(1 - pixels.width / rect.width, pixels.x / rect.width)),
-      y: Math.max(0, Math.min(1 - pixels.height / rect.height, pixels.y / rect.height)),
-      width: Math.max(MIN_SIZE, pixels.width / rect.width),
-      height: Math.max(MIN_SIZE, pixels.height / rect.height),
-    };
-  }, []);
-
   // Handle mouse down on element (start drag)
   const handleElementMouseDown = useCallback(
     (e: React.MouseEvent, block: ContentBlock) => {
@@ -91,7 +77,6 @@ export default function ElementCanvas({
       // Locked elements can be selected but not dragged
       if (block.locked) return;
 
-      const pixels = toPixels(block.position);
       setDragState({
         blockId: block.id,
         startX: e.clientX,
@@ -99,7 +84,7 @@ export default function ElementCanvas({
         originalPosition: { ...block.position },
       });
     },
-    [readOnly, slide.id, setSelectedElement, toPixels]
+    [readOnly, slide.id, setSelectedElement]
   );
 
   // Handle mouse down on resize handle
@@ -166,6 +151,7 @@ export default function ElementCanvas({
         const relX = deltaX / rect.width;
         const relY = deltaY / rect.height;
 
+        // eslint-disable-next-line prefer-const
         let newPosition = { ...resizeState.originalPosition };
 
         switch (resizeState.handle) {
@@ -214,7 +200,7 @@ export default function ElementCanvas({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, resizeState, onUpdate]);
+  }, [dragState, resizeState, onUpdate, layoutPlan]);
 
   // Handle click on canvas (deselect)
   const handleCanvasClick = useCallback(() => {

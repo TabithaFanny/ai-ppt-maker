@@ -1,17 +1,26 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useToast } from '@/lib/toast';
 import { CheckCircle, XCircle, AlertTriangle, X } from 'lucide-react';
 
 export default function Toast() {
   const { toasts, remove } = useToast();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
+    <div className="fixed top-4 right-4 z-50 space-y-2" role="status" aria-live="polite" aria-atomic="true">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] ${
+          role={toast.type === 'error' ? 'alert' : undefined}
+          className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] max-w-[calc(100vw-2rem)] ${
             toast.type === 'success'
               ? 'bg-green-50 text-green-800 border border-green-200'
               : toast.type === 'error'
@@ -23,7 +32,7 @@ export default function Toast() {
           {toast.type === 'error' && <XCircle size={20} />}
           {toast.type === 'warning' && <AlertTriangle size={20} />}
           <span className="flex-1 text-sm">{toast.message}</span>
-          <button onClick={() => remove(toast.id)} className="hover:opacity-70">
+          <button onClick={() => remove(toast.id)} className="hover:opacity-70" aria-label="关闭通知">
             <X size={16} />
           </button>
         </div>

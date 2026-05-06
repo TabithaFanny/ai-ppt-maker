@@ -4,8 +4,15 @@ import { resolveStyleConfig } from '@/lib/style-bridge';
 import { planDeck } from '@/lib/deck-planner';
 import { resolveDeckPlanToPPTJson } from '@/lib/deck-resolver';
 import { ok, fail } from '@/lib/api-response';
+import { rateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = rateLimit(ip, RATE_LIMITS.ai);
+  if (!rl.allowed) {
+    return fail('请求过于频繁，请稍后重试', 429);
+  }
+
   try {
     const { styleConfig, styleKit, userInput, useDeckPlan = true } = await request.json();
     const resolvedStyleConfig = resolveStyleConfig({ styleConfig, styleKit });

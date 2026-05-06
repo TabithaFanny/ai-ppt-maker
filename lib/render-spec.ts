@@ -8,7 +8,6 @@ import type { PPTJson, Slide, ContentBlock, StyleConfig, StyleKit } from '@/type
 import type { SlideRole } from '@/types/stylekit';
 import type { RenderSpec, RenderSlide, RenderElement, ResidualIssue } from '@/types/generation';
 import { resolveStyleConfig } from './style-bridge';
-import { resolveLayoutPlan } from './layout-resolver';
 import { performResidualCheck } from './residual-checker';
 
 /** 将相对位置解析为绝对英寸（10x7.5 英寸标准幻灯片） */

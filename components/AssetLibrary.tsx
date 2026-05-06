@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { assetStorage } from '@/lib/asset-storage';
 import { ExtractedAsset } from '@/lib/resource-extractor';
 import { AssetLibraryItem } from '@/lib/asset-storage';
-import { Search, X, Image, Grid, List, ChevronDown } from 'lucide-react';
+import { Search, X, Image, Grid, List } from 'lucide-react';
+import NextImage from 'next/image';
 
 interface AssetLibraryProps {
   isOpen: boolean;
@@ -27,12 +28,6 @@ export default function AssetLibrary({ isOpen, onClose, onAssetSelect, projectId
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  useEffect(() => {
-    if (isOpen) {
-      loadAssets();
-    }
-  }, [isOpen, activeType, projectId]);
-
   const loadAssets = async () => {
     try {
       const items = await assetStorage.getAssets({
@@ -43,7 +38,11 @@ export default function AssetLibrary({ isOpen, onClose, onAssetSelect, projectId
     } catch (error) {
       console.error('Failed to load assets:', error);
     }
-  };
+  };  useEffect(() => {
+    if (isOpen) {
+      loadAssets();
+    }
+  }, [isOpen, activeType, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filteredAssets = searchQuery
     ? assets.filter(a =>
@@ -130,7 +129,7 @@ export default function AssetLibrary({ isOpen, onClose, onAssetSelect, projectId
       <div className="flex-1 overflow-y-auto p-2">
         {filteredAssets.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <Image size={48} className="mx-auto mb-2 text-gray-300" />
+            <Image size={48} className="mx-auto mb-2 text-gray-300" aria-hidden="true" />
             <p>暂无资源</p>
             <p className="text-sm">上传 PPT 模板后自动提取</p>
           </div>
@@ -142,11 +141,11 @@ export default function AssetLibrary({ isOpen, onClose, onAssetSelect, projectId
                 onClick={() => handleAssetClick(asset)}
                 className="p-2 border rounded hover:bg-gray-50 text-left"
               >
-                <div className="aspect-square bg-gray-100 rounded mb-2 flex items-center justify-center overflow-hidden">
+                <div className="aspect-square bg-gray-100 rounded mb-2 flex items-center justify-center overflow-hidden relative">
                   {asset.thumbnail ? (
-                    <img src={asset.thumbnail} alt={asset.category} className="w-full h-full object-contain" />
+                    <NextImage src={asset.thumbnail} alt={asset.category} fill className="object-contain" unoptimized />
                   ) : (
-                    <Image size={24} className="text-gray-400" />
+                    <Image size={24} className="text-gray-400" aria-hidden="true" />
                   )}
                 </div>
                 <p className="text-xs truncate">{asset.category}</p>
@@ -162,11 +161,11 @@ export default function AssetLibrary({ isOpen, onClose, onAssetSelect, projectId
                 onClick={() => handleAssetClick(asset)}
                 className="w-full p-2 border rounded hover:bg-gray-50 flex items-center gap-3"
               >
-                <div className="w-12 h-12 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center overflow-hidden">
+                <div className="w-12 h-12 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center overflow-hidden relative">
                   {asset.thumbnail ? (
-                    <img src={asset.thumbnail} alt={asset.category} className="w-full h-full object-contain" />
+                    <NextImage src={asset.thumbnail} alt={asset.category} fill className="object-contain" unoptimized />
                   ) : (
-                    <Image size={20} className="text-gray-400" />
+                    <Image size={20} className="text-gray-400" aria-hidden="true" />
                   )}
                 </div>
                 <div className="flex-1 text-left">

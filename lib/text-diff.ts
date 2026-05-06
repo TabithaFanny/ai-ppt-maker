@@ -19,7 +19,6 @@ export function computeTextDiff(oldText: string, newText: string): TextSegment[]
 
   // 按字符逐个对比（对中文更友好）
   const segments: TextSegment[] = [];
-  const maxLen = Math.max(oldText.length, newText.length);
 
   let i = 0;
   let j = 0;

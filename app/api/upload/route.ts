@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!['pdf', 'ppt', 'pptx'].includes(ext || '')) {
+    if (!['pdf', 'ppt', 'pptx', 'docx', 'doc'].includes(ext || '')) {
       return fail('不支持的文件类型', 400);
     }
 

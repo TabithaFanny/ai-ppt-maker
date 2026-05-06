@@ -135,7 +135,7 @@ function renderElement(pptxSlide: pptxgen.Slide, element: RenderElement): void {
         fontFace: resolvedStyle.fontFamily,
         color: resolvedStyle.color.replace('#', ''),
         bold: resolvedStyle.fontWeight === 'bold',
-        align: resolvedStyle.align as any,
+        align: resolvedStyle.align as 'left' | 'center' | 'right' | 'justify',
         valign: 'top',
       });
       break;

@@ -18,9 +18,11 @@ export default function VersionHistory({ projectId, onRestore }: VersionHistoryP
     setVersions(data);
   };
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     loadVersions();
   }, [projectId]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const handleRestore = async (versionId: string) => {
     const version = await versionService.restore(versionId);

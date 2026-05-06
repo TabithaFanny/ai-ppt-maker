@@ -106,7 +106,7 @@ function SlideContentView({ slide }: { slide: Slide }) {
         <span className="font-medium text-gray-500">结论：</span>
         <span>{slide.mainConclusion || '-'}</span>
       </div>
-      {slide.content.map((b, i) => (
+      {slide.content.map((b) => (
         <div key={b.id} className="border-l-2 border-gray-200 pl-2">
           <span className="font-medium text-gray-400">[{b.type}] </span>
           <span>{b.content?.slice(0, 100) || '-'}</span>
@@ -193,8 +193,7 @@ export default function AiEditPanel({ currentSlide, pptJson, onApplyPatch, onIns
         : currentSlide.title;
     const finalTitle = titleValue || currentSlide.title;
     const titlePatch: EditPatch = {
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
+      id: crypto.randomUUID(),      timestamp: Date.now(),
       slideId: currentSlide.id,
       operation: 'update_title',
       elementId: undefined,
@@ -213,7 +212,7 @@ export default function AiEditPanel({ currentSlide, pptJson, onApplyPatch, onIns
     const newTitle = typeof rawValue === 'string'
       ? rawValue
       : (rawValue && typeof rawValue === 'object' && 'title' in rawValue)
-        ? String((rawValue as any).title)
+        ? String((rawValue as Record<string, unknown>).title)
         : currentSlide.title;
     // 复制当前 slide 保证合法性，不从 newValue 提取 content
     const newSlide: Slide = {

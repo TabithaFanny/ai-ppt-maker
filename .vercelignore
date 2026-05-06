@@ -1,0 +1,11 @@
+.env
+.env.local
+.env.*.local
+uploads/
+.next/
+node_modules/
+.windsurf/
+.night-shift-cron.log
+scripts/.venv/
+test-results/
+playwright-report/

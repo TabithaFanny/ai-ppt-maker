@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { AnalysisJob, StyleKit, StyleDNA, SlideImage } from '@/types';
 import StyleKitReport from './StyleKitReport';
-import { Sparkles, Loader2, AlertCircle, FileText, Palette, Type, Check, ChevronRight } from 'lucide-react';
+import { Sparkles, AlertCircle, FileText, Palette, Type, Check, ChevronRight } from 'lucide-react';
 import { analysisJobService } from '@/lib/db';
 
 type WizardStep = 'extracting' | 'extracting-dna' | 'distilling' | 'complete' | 'error';
@@ -68,6 +68,7 @@ export default function StyleKitWizard({
 
   useEffect(() => {
     void initializeAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId]);
 
   async function initializeAnalysis() {
@@ -162,8 +163,9 @@ export default function StyleKitWizard({
           throw new Error('提取幻灯片失败');
         }
 
-        const { slides } = await extractResponse.json();
-        allSlides = (slides as ExtractedSlide[]).slice(0, 10);
+        const extractResult = await extractResponse.json();
+        const slides = (extractResult.data?.slides || []) as ExtractedSlide[];
+        allSlides = slides.slice(0, 10);
         await persistJobSnapshot(currentJobId, {
           status: 'processing',
           progress: {
@@ -185,47 +187,45 @@ export default function StyleKitWizard({
 
       setProgress({ current: 2, total: allSlides.length + 2, message: `已提取 ${allSlides.length} 页幻灯片` });
 
-      // Step 2: Extract StyleDNA from each slide
+      // Step 2: Extract StyleDNA from all slides in one batch
       setStep('extracting-dna');
       const styleDNAResults: ExtractResult['styleDNAResults'] = existingStyleDNAResults ? [...existingStyleDNAResults] : [];
       const processedSlideIndexes = new Set(styleDNAResults.map((item) => item.slideIndex));
+      const pendingSlides = allSlides.filter(s => !processedSlideIndexes.has(s.slideIndex));
 
-      for (let i = 0; i < allSlides.length; i++) {
-        const slide = allSlides[i];
-        if (processedSlideIndexes.has(slide.slideIndex)) {
-          continue;
-        }
+      if (pendingSlides.length > 0) {
         setProgress({
-          current: 3 + i,
+          current: 3,
           total: allSlides.length + 2,
-          message: `正在分析第 ${slide.slideIndex} 页... (${i + 1}/${allSlides.length})`,
+          message: `正在批量分析 ${pendingSlides.length} 页幻灯片...`,
         });
 
         const dnaResponse = await fetch('/api/style-kit/extract', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            slides: [{
+            slides: pendingSlides.map(slide => ({
               slideIndex: slide.slideIndex,
               imageBase64: slide.imageBase64,
               slideXML: slide.slideXML,
               textContent: slide.textContent,
               colorScheme: slide.colorScheme,
               fontInfo: slide.fontInfo,
-            }],
+            })),
             sourceFileId: fileId,
             sourceFileName: fileName,
           }),
         });
 
         if (dnaResponse.ok) {
-          const data: any = await dnaResponse.json();
-          // 保存 extract 元信息
-          if (data.hadFailures || data.wasSampled || data.processedSlides) {
-            setExtractMeta({ hadFailures: data.hadFailures, wasSampled: data.wasSampled, processedSlides: data.processedSlides });
+          const dnaPayload = await dnaResponse.json();
+          const dnaData = dnaPayload.data || dnaPayload;
+          if (dnaData.hadFailures || dnaData.wasSampled || dnaData.processedSlides) {
+            setExtractMeta({ hadFailures: dnaData.hadFailures as boolean | undefined, wasSampled: dnaData.wasSampled as boolean | undefined, processedSlides: dnaData.processedSlides as number | undefined });
           }
-          if (data.styleDNAResults && data.styleDNAResults.length > 0) {
-            styleDNAResults.push(data.styleDNAResults[0]);
+          const dnaResults = dnaData.styleDNAResults as unknown[];
+          if (dnaResults && dnaResults.length > 0) {
+            styleDNAResults.push(...(dnaResults as ExtractResult['styleDNAResults'][number][]));
             await persistJobSnapshot(currentJobId, {
               status: 'processing',
               progress: {
@@ -269,7 +269,8 @@ export default function StyleKitWizard({
         throw new Error('StyleKit 提炼失败');
       }
 
-      const distillData: DistillResult = await distillResponse.json();
+      const distillPayload = await distillResponse.json();
+      const distillData: DistillResult = distillPayload.data || distillPayload;
 
       // Step 4: Save to store (will persist to IndexedDB)
       const newStyleKit = distillData.styleKit;

@@ -20,6 +20,19 @@ const ROLE_TO_LAYOUT: Record<SlideRole, Slide['layout']> = {
   'comparison': 'content',
   'summary': 'content',
   'closing': 'title',
+  // AI PPT 助手新增角色
+  'agenda': 'content',
+  'background': 'content',
+  'problem': 'content',
+  'insight': 'content',
+  'solution': 'content',
+  'architecture': 'content',
+  'feature': 'content',
+  'workflow': 'content',
+  'case': 'content',
+  'data': 'chart',
+  'business': 'content',
+  'team': 'content',
 };
 
 /** 根据 SlideRole 和 StyleKit 选择最佳布局类型（委托给 layout-resolver） */

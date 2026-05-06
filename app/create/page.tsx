@@ -1,17 +1,16 @@
 'use client';
 
 import { useEffect, useState, lazy, Suspense, useCallback } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
+import type { AppState } from '@/lib/store';
 import { projectService } from '@/lib/db';
-import { isMockMode } from '@/lib/api-client';
 import EnhancedRequirementsForm from '@/components/EnhancedRequirementsForm';
 import StyleKitWizard from '@/components/style-kit/StyleKitWizard';
 import { StyleKit } from '@/types';
 import { styleKitToStyleConfig } from '@/lib/style-bridge';
 import { useStyleKitInit } from '@/hooks/useStyleKitInit';
-import { Check, Upload, FileText, Sparkles } from 'lucide-react';
+import { Check, Upload, FileText } from 'lucide-react';
 import Header from '@/components/shell/Header';
 
 const EditStep = lazy(() => import('@/components/EditStep'));
@@ -27,7 +26,7 @@ const STEPS = [
 ];
 
 // ====== 状态文案 ======
-function getStepStatus(step: number, currentStep: number, store: any): { status: 'done' | 'current' | 'pending' | 'disabled'; statusText: string } {
+function getStepStatus(step: number, currentStep: number, store: AppState): { status: 'done' | 'current' | 'pending' | 'disabled'; statusText: string } {
   const { currentProject } = store;
   const hasUploaded = !!currentProject?.templateFileId;
   const hasStyle = !!store.currentStyleKit || !!currentProject?.styleKitId;
@@ -72,13 +71,33 @@ function getStepStatus(step: number, currentStep: number, store: any): { status:
 }
 
 export default function CreatePage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <CreatePageContent />
+    </Suspense>
+  );
+}
+
+function CreatePageContent() {
   const store = useStore();
   const { currentProject, currentStep, setCurrentProject, setCurrentStep } = store;
-  const { isInitialized: styleKitReady } = useStyleKitInit();
+  const { isInitialized: _styleKitReady } = useStyleKitInit();
+  void _styleKitReady;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const isWizard = searchParams.get('mode') === 'wizard';
+
+  // 默认重定向到 Workbench, forwarding ?new=1 if present
+  const isNewProject = searchParams.get('new') === '1';
+  useEffect(() => {
+    if (!isWizard) {
+      router.replace(isNewProject ? '/create/workbench?new=1' : '/create/workbench');
+    }
+  }, [isWizard, isNewProject, router]);
 
   useEffect(() => {
     const initProject = async () => {
+      if (!isWizard) return;
       if (!currentProject) {
         // 尝试恢复最近的项目（支持跨刷新持久化）
         const projects = await projectService.getAll();
@@ -100,7 +119,7 @@ export default function CreatePage() {
       }
     };
     initProject();
-  }, [currentProject, setCurrentProject, setCurrentStep]);
+  }, [currentProject, isWizard, setCurrentProject, setCurrentStep]);
 
   const handleStepClick = useCallback((stepNum: number) => {
     if (stepNum === currentStep) return;
@@ -110,43 +129,48 @@ export default function CreatePage() {
     }
   }, [currentStep, store, setCurrentStep]);
 
+  if (!isWizard) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-[var(--color-surface)]">
       <Header />
 
+      <main>
       {/* 步骤指示器 */}
       <div className="bg-white border-b border-[#e2e8f0]">
-        <div className="max-w-7xl mx-auto px-8 py-5">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 md:py-5">
+          <div className="flex items-center justify-between max-w-4xl mx-auto overflow-x-auto">
             {STEPS.map((step, index) => {
               const { status, statusText } = getStepStatus(step.num, currentStep, store);
               const isClickable = status === 'done' || status === 'current';
               return (
-                <div key={step.num} className="flex items-center flex-1">
+                <div key={step.num} className="flex items-center flex-1 min-w-0">
                   <button
                     onClick={() => handleStepClick(step.num)}
                     disabled={!isClickable}
-                    className="flex flex-col items-center gap-1 group"
+                    className="flex flex-col items-center gap-0.5 md:gap-1 group"
                   >
                     {/* 圆点 */}
                     <div className={`
-                      w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all
+                      w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-medium transition-all flex-shrink-0
                       ${status === 'done' ? 'bg-[#1e40af] text-white shadow-sm' : ''}
                       ${status === 'current' ? 'bg-[#1e40af] text-white ring-4 ring-[#1e40af]/20' : ''}
                       ${status === 'pending' ? 'bg-gray-200 text-gray-500' : ''}
                       ${status === 'disabled' ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : ''}
                     `}>
-                      {status === 'done' ? <Check size={16} /> : step.num}
+                      {status === 'done' ? <Check size={14} className="md:w-4 md:h-4" /> : step.num}
                     </div>
-                    <span className={`text-xs font-medium ${status === 'disabled' ? 'text-gray-300' : status === 'current' ? 'text-[#1e40af]' : 'text-gray-500'}`}>
+                    <span className={`text-[10px] md:text-xs font-medium whitespace-nowrap ${status === 'disabled' ? 'text-gray-300' : status === 'current' ? 'text-[#1e40af]' : 'text-gray-500'}`}>
                       {step.label}
                     </span>
-                    <span className={`text-[10px] leading-tight ${status === 'disabled' ? 'text-gray-200' : 'text-gray-400'}`}>
+                    <span className={`hidden md:block text-[10px] leading-tight ${status === 'disabled' ? 'text-gray-200' : 'text-gray-400'}`}>
                       {statusText}
                     </span>
                   </button>
                   {index < 4 && (
-                    <div className={`flex-1 h-[1px] mx-3 mt-[-20px] ${status === 'done' ? 'bg-[#1e40af]' : 'bg-gray-200'}`} />
+                    <div className={`flex-1 h-[1px] mx-1 md:mx-3 mt-[-20px] ${status === 'done' ? 'bg-[#1e40af]' : 'bg-gray-200'}`} />
                   )}
                 </div>
               );
@@ -171,12 +195,13 @@ export default function CreatePage() {
           </Suspense>
         )}
       </div>
+      </main>
     </div>
   );
 }
 
 // ====== FileUploadStep ======
-function FileUploadStep({ store }: { store: any }) {
+function FileUploadStep({ store }: { store: AppState }) {
   const { setCurrentStep, setCurrentProject, currentProject } = store;
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -196,11 +221,12 @@ function FileUploadStep({ store }: { store: any }) {
       const formData = new FormData();
       formData.append('file', file);
       const response = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '上传失败');
+      const responseData = await response.json();
+      if (!response.ok) throw new Error(responseData.error || '上传失败');
+      const fileId = responseData.data?.fileId || responseData.fileId;
       if (currentProject) {
-        await projectService.update(currentProject.id, { templateFileId: data.fileId });
-        setCurrentProject({ ...currentProject, templateFileId: data.fileId });
+        await projectService.update(currentProject.id, { templateFileId: fileId });
+        setCurrentProject({ ...currentProject, templateFileId: fileId });
       }
       setUploadProgress(100);
       setTimeout(() => setCurrentStep(2), 400);
@@ -247,7 +273,7 @@ function FileUploadStep({ store }: { store: any }) {
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-[500px]">
-        <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-10 text-center max-w-lg">
+        <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-4 md:p-10 text-center max-w-lg">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <FileText size={28} className="text-red-500" />
           </div>
@@ -261,7 +287,7 @@ function FileUploadStep({ store }: { store: any }) {
 
   return (
     <div className="flex items-center justify-center min-h-[500px] px-4 py-12">
-      <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-10 w-full max-w-2xl">
+      <div className="bg-white rounded-2xl border border-[#e2e8f0] shadow-sm p-4 md:p-10 w-full max-w-2xl">
         <div className="max-w-md mx-auto">
           {/* 标题 */}
           <h2 className="text-xl font-bold text-[#0f172a] mb-2">第 01 步 · 上传参考 PPT</h2>
@@ -304,7 +330,7 @@ function FileUploadStep({ store }: { store: any }) {
 }
 
 // ====== AnalyzeStep ======
-function AnalyzeStep({ store }: { store: any }) {
+function AnalyzeStep({ store }: { store: AppState }) {
   const { currentProject, setCurrentProject, setCurrentStep, setCurrentStyleKit } = store;
 
   const handleStyleKitComplete = async (styleKit: StyleKit) => {

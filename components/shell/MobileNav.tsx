@@ -15,7 +15,7 @@ export default function MobileNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t md:hidden z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-[var(--color-surface-secondary)] border-t border-[var(--color-border)] md:hidden z-50">
       <div className="flex justify-around items-center h-16">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href;
@@ -23,8 +23,9 @@ export default function MobileNav() {
             <Link
               key={href}
               href={href}
+              aria-current={isActive ? 'page' : undefined}
               className={`flex flex-col items-center justify-center flex-1 h-full ${
-                isActive ? 'text-blue-600' : 'text-gray-600'
+                isActive ? 'text-blue-600' : 'text-[var(--color-text-secondary)]'
               }`}
             >
               <Icon size={24} />

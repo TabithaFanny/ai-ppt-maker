@@ -39,10 +39,10 @@ const helpSections = [
 
 export default function HelpPage() {
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-[var(--color-surface)]">
       <Header />
 
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <main className="max-w-4xl mx-auto px-6 py-10">
         <div className="mb-8">
           <Link href="/" className="inline-flex items-center gap-2 text-sm text-[#64748b] hover:text-[#1e40af] mb-6">
             <ArrowLeft size={16} />
@@ -98,7 +98,7 @@ export default function HelpPage() {
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

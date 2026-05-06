@@ -3,14 +3,16 @@
 import { useState, useRef, TouchEvent, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { ChevronLeft, ChevronRight, Download, Share2, Maximize2, Minimize2, RefreshCw, X, Image } from 'lucide-react';
-import pptxgen from 'pptxgenjs';
+import NextImage from 'next/image';
+
 import SlidePreview from './SlidePreview';
-import { buildRenderSpec, getSlideBackground } from '@/lib/render-spec';
+import { buildRenderSpec } from '@/lib/render-spec';
 import { autoFixPPTJson } from '@/lib/auto-fixer';
 import { exportRenderSpecToPPTX } from '@/lib/export-pptx';
 import { generateImage } from '@/lib/gpt-image';
 import { imageService } from '@/lib/db';
 import type { StyleKit } from '@/types';
+import type { SlideRole } from '@/types/stylekit';
 
 export default function GenerateStep() {
   const { currentProject, currentStyleKit } = useStore();
@@ -21,7 +23,6 @@ export default function GenerateStep() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   // 单张重生成状态
   const [slideImages, setSlideImages] = useState<Record<number, string>>({});
-  const [regeneratingPage, setRegeneratingPage] = useState<number | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editPrompt, setEditPrompt] = useState('');
   const [modalPageIndex, setModalPageIndex] = useState<number>(0);
@@ -195,10 +196,10 @@ export default function GenerateStep() {
         renderSpecForCheck.issues
       );
 
-      const slideRoles = new Map<string, string>();
+      const slideRoles = new Map<string, SlideRole>();
       if (currentProject.deckPlan) {
         for (const plan of currentProject.deckPlan.slidePlans) {
-          slideRoles.set(plan.id, plan.role);
+          slideRoles.set(plan.id, plan.role as SlideRole);
         }
       }
 
@@ -212,7 +213,7 @@ export default function GenerateStep() {
       const renderSpec = buildRenderSpec(
         fixedPPTJson,
         styleSource as StyleKit,
-        slideRoles as Map<string, string> as any
+        slideRoles
       );
 
       const warnings = await exportRenderSpecToPPTX(renderSpec, {
@@ -319,7 +320,7 @@ export default function GenerateStep() {
             disabled={isGenerating}
             className="flex items-center gap-2 px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
           >
-            <Image size={20} />
+            <Image size={20} aria-hidden="true" />
             {isGenerating ? `AI 生图中 ${progress.current}/${progress.total}` : 'AI 批量生图'}
           </button>
           <button
@@ -381,10 +382,13 @@ export default function GenerateStep() {
         {/* AI 生成图片优先显示 */}
         {activeImageUrl ? (
           <div className="relative max-w-4xl w-full">
-            <img
+            <NextImage
               src={activeImageUrl}
               alt={`第${currentIndex + 1}页 AI 生成图`}
+              width={1200}
+              height={675}
               className="w-full rounded-lg shadow-lg"
+              unoptimized
             />
             <button
               onClick={() => openRegenModal(currentIndex)}
@@ -409,7 +413,7 @@ export default function GenerateStep() {
             onClick={() => openRegenModal(currentIndex)}
             className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 shadow-md transition-all"
           >
-            <Image size={14} />
+            <Image size={14} aria-hidden="true" />
             AI 生成预览图
           </button>
         )}
@@ -481,7 +485,7 @@ export default function GenerateStep() {
 
       {/* 重生成弹窗 */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`重生成第 ${modalPageIndex + 1} 页`}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
             {/* 弹窗头部 */}
             <div className="flex items-center justify-between px-6 py-4 border-b">
@@ -497,10 +501,13 @@ export default function GenerateStep() {
             {/* 预览图 */}
             {previewUrl && (
               <div className="px-6 pt-4">
-                <img
+                <NextImage
                   src={previewUrl}
                   alt="当前预览"
+                  width={1200}
+                  height={675}
                   className="w-full rounded-lg border"
+                  unoptimized
                 />
               </div>
             )}

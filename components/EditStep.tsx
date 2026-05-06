@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout, X, RefreshCw, Loader2 } from 'lucide-react';
+import NextImage from 'next/image';
 import { useStore } from '@/lib/store';
 import OutlineTree from './OutlineTree';
 import SlideEditor from './editor/SlideEditor';
@@ -67,6 +68,7 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
   }, [undo, redo]);
 
   // 初始化或生成 PPT
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (currentProject?.pptJson) {
       const fixedSlides = currentProject.pptJson.slides.map((s) => {
@@ -84,6 +86,7 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       generatePPT();
     }
   }, [currentProject, resolvedStyleConfig]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   // 持久化 selectedSlideIndex（300ms 防抖）
   const slideIndexTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,7 +174,7 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
         setSaveStatus('error');
       }
     }, 1000);
-  }, [currentProject?.id, setSaveStatus]);
+  }, [currentProject, setSaveStatus]);
 
   const commitSlides = (newSlides: Slide[]) => {
     setSlides(newSlides);
@@ -286,9 +289,9 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       });
       if (!res.ok) throw new Error('生成失败');
       const data = await res.json();
-      if (data.success && data.imageUrl) {
+      if (data.success && data.data?.imageUrl) {
         const imgBlock: ContentBlock = {
-          id: crypto.randomUUID(), type: 'image', content: data.imageUrl,
+          id: crypto.randomUUID(), type: 'image', content: data.data.imageUrl,
           position: { x: 0.1, y: 0.3, width: 0.8, height: 0.5 },
         };
         handleSlideUpdate({ ...currentSlide, content: [...currentSlide.content, imgBlock] });
@@ -331,8 +334,8 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       });
       if (!res.ok) throw new Error('生成失败');
       const data = await res.json();
-      if (data.success && data.imageUrl) {
-        setPreviewImageUrl(data.imageUrl);
+      if (data.success && data.data?.imageUrl) {
+        setPreviewImageUrl(data.data.imageUrl);
       } else {
         throw new Error(data.error || '返回数据异常');
       }
@@ -505,7 +508,7 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
       />
 
       {isAiEditOpen && currentSlide && currentProject?.pptJson && (
-        <div className="fixed bottom-24 right-4 w-96 z-50">
+        <div className="fixed bottom-24 right-4 max-w-[calc(100vw-2rem)] w-96 z-50">
           <AiEditPanel
             currentSlide={currentSlide}
             pptJson={currentProject.pptJson}
@@ -538,10 +541,13 @@ export default function EditStep({ initialMode = 'content' }: { initialMode?: Ed
                 </div>
               ) : previewImageUrl ? (
                 <div className="space-y-3">
-                  <img
+                  <NextImage
                     src={previewImageUrl}
                     alt="幻灯片预览"
+                    width={1200}
+                    height={675}
                     className="w-full aspect-video object-contain bg-gray-100 rounded border"
+                    unoptimized
                   />
                   <p className="text-xs text-gray-400 text-center">
                     此预览仅用于查看当前页的视觉效果，不会替代可编辑 PPT 内容

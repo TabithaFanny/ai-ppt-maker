@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { Project, StyleConfig, StyleReport, UserInput, PPTJson, DeckPlan, GenerationProgress, ImageCandidate, PromptLibrary, SlideVisualPrompt, TemplatePrompt, UserPrompt, StyleKit, AnalysisJob, Scenario } from '@/types';
+import type { ReferenceSlide, RefSlidePrompt, GenSlidePrompt, GenSlideResult, WorkbenchMessage, MasterTemplate } from '@/types';
 import type { EditPatch } from '@/types/generation';
-import { styleKitService, analysisJobService, projectService } from './db';
+import { styleKitService, analysisJobService, projectService, workbenchService } from './db';
 import { syncPromptTemplatesWithStyleKits } from './prompt-bridge';
 import {
   createEditHistory,
@@ -14,7 +15,7 @@ import {
 } from './edit-history';
 import { applyPatch, reversePatch } from './edit-patch';
 
-interface AppState {
+export interface AppState {
   currentProject: Project | null;
   currentStep: number;
   saveStatus: 'saved' | 'saving' | 'unsaved' | 'error';
@@ -36,6 +37,22 @@ interface AppState {
   editHistory: EditHistory;
   canUndo: boolean;
   canRedo: boolean;
+  // Workbench 状态
+  referenceSlides: ReferenceSlide[];
+  referenceSlidePrompts: RefSlidePrompt[];
+  generatedSlidePrompts: GenSlidePrompt[];
+  generatedSlideResults: GenSlideResult[];
+  workbenchMessages: WorkbenchMessage[];
+  selectedRefSlideIndex: number;
+  selectedNewSlideIndex: number;
+  referenceSlideAnalysisStatus: Record<number, 'idle' | 'queued' | 'analyzing' | 'done' | 'error'>;
+  referenceSlideAnalysisErrors: Record<number, string>;
+  // 母版模板
+  masterTemplate: MasterTemplate | null;
+  // 资产库与文档
+  assetLibrary: Array<{ assetId: string; name: string; type: string; url: string; description: string }>;
+  extractedDocumentText: string;
+  uploadedDocuments: Array<{ docId: string; name: string; text: string; uploadedAt: number }>;
   // Actions
   setCurrentProject: (project: Project | null) => void;
   setCurrentStep: (step: number) => void;
@@ -76,6 +93,31 @@ interface AppState {
   pushPatch: (patch: EditPatch) => void;
   undo: () => void;
   redo: () => void;
+  // Workbench Actions
+  setSelectedRefSlide: (index: number) => void;
+  setSelectedNewSlide: (index: number) => void;
+  setReferenceSlides: (slides: ReferenceSlide[]) => void;
+  setReferenceSlidePrompts: (prompts: RefSlidePrompt[]) => void;
+  upsertReferenceSlidePrompt: (prompt: RefSlidePrompt) => void;
+  setReferenceSlideAnalysisStatus: (slideIndex: number, status: AppState['referenceSlideAnalysisStatus'][number], error?: string) => void;
+  resetReferenceSlideAnalysisState: (slideIndexes?: number[]) => void;
+  setGeneratedSlidePrompts: (prompts: GenSlidePrompt[]) => void;
+  updateGeneratedSlidePrompt: (index: number, updates: Partial<GenSlidePrompt>) => void;
+  setGeneratedSlideResults: (results: GenSlideResult[]) => void;
+  upsertGeneratedSlideResult: (result: GenSlideResult) => void;
+  addWorkbenchMessage: (msg: WorkbenchMessage) => void;
+  setWorkbenchMessages: (msgs: WorkbenchMessage[]) => void;
+  // 母版与资产库 Actions
+  setMasterTemplate: (template: MasterTemplate | null) => void;
+  setAssetLibrary: (assets: AppState['assetLibrary']) => void;
+  addAsset: (asset: AppState['assetLibrary'][0]) => void;
+  removeAsset: (assetId: string) => void;
+  setExtractedDocumentText: (text: string) => void;
+  addUploadedDocument: (doc: { docId: string; name: string; text: string }) => void;
+  removeUploadedDocument: (docId: string) => void;
+  resetWorkbench: () => void;
+  saveWorkbench: () => Promise<void>;
+  loadWorkbench: (projectId?: string) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -104,6 +146,21 @@ export const useStore = create<AppState>((set, get) => ({
   editHistory: createEditHistory(),
   canUndo: false,
   canRedo: false,
+  // Workbench 状态
+  referenceSlides: [],
+  referenceSlidePrompts: [],
+  generatedSlidePrompts: [],
+  generatedSlideResults: [],
+  workbenchMessages: [],
+  selectedRefSlideIndex: 0,
+  selectedNewSlideIndex: 0,
+  referenceSlideAnalysisStatus: {},
+  referenceSlideAnalysisErrors: {},
+  // 资产库与文档
+  masterTemplate: null,
+  assetLibrary: [],
+  extractedDocumentText: '',
+  uploadedDocuments: [],
   setCurrentProject: (project) =>
     set((state) => ({
       currentProject: project,
@@ -162,7 +219,7 @@ export const useStore = create<AppState>((set, get) => ({
         : null,
     })),
   setImageCandidates: (candidates) =>
-    set((state) => ({
+    set(() => ({
       imageCandidates: candidates,
     })),
   clearImageCandidates: () => set({ imageCandidates: [] }),
@@ -479,4 +536,296 @@ export const useStore = create<AppState>((set, get) => ({
       get().setSaveStatus('error');
     });
   },
+  // Workbench Actions
+  setSelectedRefSlide: (index) => set({ selectedRefSlideIndex: index }),
+  setSelectedNewSlide: (index) => set({ selectedNewSlideIndex: index }),
+  setReferenceSlides: (slides) => set({ referenceSlides: slides }),
+  setReferenceSlidePrompts: (prompts) => set({ referenceSlidePrompts: prompts }),
+  upsertReferenceSlidePrompt: (prompt) =>
+    set((state) => {
+      const existing = state.referenceSlidePrompts.findIndex((p) => p.slideIndex === prompt.slideIndex);
+      if (existing >= 0) {
+        const updated = [...state.referenceSlidePrompts];
+        updated[existing] = prompt;
+        return { referenceSlidePrompts: updated };
+      }
+      return { referenceSlidePrompts: [...state.referenceSlidePrompts, prompt] };
+    }),
+  setReferenceSlideAnalysisStatus: (slideIndex, status, error) =>
+    set((state) => ({
+      referenceSlideAnalysisStatus: {
+        ...state.referenceSlideAnalysisStatus,
+        [slideIndex]: status,
+      },
+      referenceSlideAnalysisErrors:
+        status === 'error'
+          ? {
+              ...state.referenceSlideAnalysisErrors,
+              [slideIndex]: error || '分析失败',
+            }
+          : status === 'done' || status === 'analyzing'
+            ? Object.fromEntries(
+                Object.entries(state.referenceSlideAnalysisErrors).filter(([key]) => Number(key) !== slideIndex)
+              )
+            : state.referenceSlideAnalysisErrors,
+    })),
+  resetReferenceSlideAnalysisState: (slideIndexes) =>
+    set((state) => {
+      if (!slideIndexes || slideIndexes.length === 0) {
+        return {
+          referenceSlideAnalysisStatus: {},
+          referenceSlideAnalysisErrors: {},
+        };
+      }
+
+      return {
+        referenceSlideAnalysisStatus: Object.fromEntries(
+          Object.entries(state.referenceSlideAnalysisStatus).filter(([key]) => !slideIndexes.includes(Number(key)))
+        ),
+        referenceSlideAnalysisErrors: Object.fromEntries(
+          Object.entries(state.referenceSlideAnalysisErrors).filter(([key]) => !slideIndexes.includes(Number(key)))
+        ),
+      };
+    }),
+  setGeneratedSlidePrompts: (prompts) => set({ generatedSlidePrompts: prompts }),
+  updateGeneratedSlidePrompt: (index, updates) =>
+    set((state) => ({
+      generatedSlidePrompts: state.generatedSlidePrompts.map((p) =>
+        p.index === index ? { ...p, ...updates } : p
+      ),
+    })),
+  setGeneratedSlideResults: (results) => set({ generatedSlideResults: results }),
+  upsertGeneratedSlideResult: (result) =>
+    set((state) => {
+      const existing = state.generatedSlideResults.findIndex((r) => r.slideIndex === result.slideIndex);
+      if (existing >= 0) {
+        const prev = state.generatedSlideResults[existing];
+        const prevVersion = prev.version || 1;
+        // Snapshot previous version if it had a preview (i.e. was actually generated)
+        const snapshot = prev.previewImage
+          ? {
+              slideId: prev.slideId,
+              version: prevVersion,
+              previewImage: prev.previewImage,
+              pptJsonSlide: prev.pptJsonSlide,
+              tweakNote: prev.tweakNote,
+              createdAt: Date.now(),
+            }
+          : null;
+        const history = [...(prev.previousVersions || [])];
+        if (snapshot) history.push(snapshot);
+        // Keep max 5 versions
+        while (history.length > 5) history.shift();
+
+        const updated = [...state.generatedSlideResults];
+        updated[existing] = {
+          ...result,
+          version: prevVersion + 1,
+          previousVersions: history,
+        };
+        return { generatedSlideResults: updated };
+      }
+      return {
+        generatedSlideResults: [
+          ...state.generatedSlideResults,
+          { ...result, version: 1, previousVersions: [] },
+        ],
+      };
+    }),
+  addWorkbenchMessage: (msg) =>
+    set((state) => {
+      const idx = state.workbenchMessages.findIndex((m) => m.id === msg.id);
+      if (idx >= 0) {
+        // Replace existing message with same id (used for streaming updates)
+        const updated = [...state.workbenchMessages];
+        updated[idx] = msg;
+        return { workbenchMessages: updated };
+      }
+      return { workbenchMessages: [...state.workbenchMessages, msg] };
+    }),
+  setWorkbenchMessages: (msgs) => set({ workbenchMessages: msgs }),
+
+  // 母版与资产库 Actions
+  setMasterTemplate: (template) => set({ masterTemplate: template }),
+  setAssetLibrary: (assets) => set({ assetLibrary: assets }),
+  addAsset: (asset) => set((state) => ({
+    assetLibrary: [...state.assetLibrary.filter((a) => a.assetId !== asset.assetId), asset],
+  })),
+  removeAsset: (assetId) => set((state) => ({
+    assetLibrary: state.assetLibrary.filter((a) => a.assetId !== assetId),
+  })),
+  setExtractedDocumentText: (text) => set({ extractedDocumentText: text }),
+  addUploadedDocument: (doc) => set((state) => {
+    const newDocs = [...state.uploadedDocuments, { ...doc, uploadedAt: Date.now() }];
+    return {
+      uploadedDocuments: newDocs,
+      extractedDocumentText: newDocs.map((d) => `[${d.name}]\n${d.text}`).join('\n\n---\n\n'),
+    };
+  }),
+  removeUploadedDocument: (docId) => set((state) => {
+    const newDocs = state.uploadedDocuments.filter((d) => d.docId !== docId);
+    return {
+      uploadedDocuments: newDocs,
+      extractedDocumentText: newDocs.map((d) => `[${d.name}]\n${d.text}`).join('\n\n---\n\n'),
+    };
+  }),
+
+  // Save workbench to IndexedDB (manual save button trigger + auto-save)
+  saveWorkbench: async () => {
+    const state = get();
+    if (!state.currentProject) {
+      console.warn('[saveWorkbench] skipped: no currentProject');
+      return;
+    }
+    const projectId = state.currentProject.id;
+    console.log('[saveWorkbench] saving project', projectId, {
+      refSlides: state.referenceSlides.length,
+      refPrompts: state.referenceSlidePrompts.length,
+      genPrompts: state.generatedSlidePrompts.length,
+      genResults: state.generatedSlideResults.length,
+      messages: state.workbenchMessages.length,
+      hasMaster: !!state.masterTemplate,
+    });
+    set({ saveStatus: 'saving' });
+    try {
+      await workbenchService.save(projectId, {
+        referenceSlides: state.referenceSlides,
+        referenceSlidePrompts: state.referenceSlidePrompts,
+        generatedSlidePrompts: state.generatedSlidePrompts,
+        generatedSlideResults: state.generatedSlideResults,
+        workbenchMessages: state.workbenchMessages.filter((m) => m.id !== 'welcome'),
+        selectedRefSlideIndex: state.selectedRefSlideIndex,
+        selectedNewSlideIndex: state.selectedNewSlideIndex,
+        extractedDocumentText: state.extractedDocumentText,
+        uploadedDocuments: state.uploadedDocuments,
+        masterTemplate: state.masterTemplate,
+        promptLibrary: state.promptLibrary,
+        referenceFileId: '',
+      });
+      set({ saveStatus: 'saved' });
+      console.log('[saveWorkbench] success');
+    } catch (err) {
+      console.error('[saveWorkbench] failed', err);
+      set({ saveStatus: 'error' });
+    }
+  },
+
+  // Load workbench from IndexedDB (called on page init)
+  loadWorkbench: async (projectId) => {
+    const state = get();
+    const resolvedProjectId = projectId || state.currentProject?.id;
+    if (!resolvedProjectId) return;
+    const snapshot = await workbenchService.load(resolvedProjectId);
+    if (snapshot) {
+      const restoredStatus = Object.fromEntries(
+        (snapshot.referenceSlidePrompts || []).map((prompt) => [prompt.slideIndex, 'done' as const])
+      );
+      set({
+        referenceSlides: snapshot.referenceSlides,
+        referenceSlidePrompts: snapshot.referenceSlidePrompts,
+        generatedSlidePrompts: snapshot.generatedSlidePrompts,
+        generatedSlideResults: snapshot.generatedSlideResults || [],
+        workbenchMessages: snapshot.workbenchMessages,
+        selectedRefSlideIndex: snapshot.selectedRefSlideIndex,
+        selectedNewSlideIndex: snapshot.selectedNewSlideIndex,
+        extractedDocumentText: snapshot.extractedDocumentText || '',
+        uploadedDocuments: snapshot.uploadedDocuments || [],
+        referenceSlideAnalysisStatus: restoredStatus,
+        referenceSlideAnalysisErrors: {},
+        masterTemplate: snapshot.masterTemplate || null,
+        promptLibrary: snapshot.promptLibrary || state.promptLibrary,
+      });
+    } else {
+      // No snapshot for this project — clear any stale workbench state from
+      // the previous project that may still be in memory.
+      set({
+        referenceSlides: [],
+        referenceSlidePrompts: [],
+        generatedSlidePrompts: [],
+        generatedSlideResults: [],
+        workbenchMessages: [],
+        selectedRefSlideIndex: 0,
+        selectedNewSlideIndex: 0,
+        extractedDocumentText: '',
+        uploadedDocuments: [],
+        referenceSlideAnalysisStatus: {},
+        referenceSlideAnalysisErrors: {},
+      });
+    }
+    // Also load assets
+    const { assetService } = await import('./db');
+    const assets = await assetService.getByProject(resolvedProjectId);
+    set({
+      assetLibrary: assets.map((a) => ({
+        assetId: a.assetId,
+        name: a.name,
+        type: a.type,
+        url: a.url,
+        description: a.description,
+      })),
+    });
+  },
+
+  // Reset workbench state when switching to a new project.
+  // This clears reference slides, generated prompts, messages, and document
+  // text so that stale data from the previous project doesn't linger in memory.
+  resetWorkbench: () => set({
+    referenceSlides: [],
+    referenceSlidePrompts: [],
+    generatedSlidePrompts: [],
+    workbenchMessages: [],
+    selectedRefSlideIndex: 0,
+    selectedNewSlideIndex: 0,
+    referenceSlideAnalysisStatus: {},
+    referenceSlideAnalysisErrors: {},
+    masterTemplate: null,
+    assetLibrary: [],
+    extractedDocumentText: '',
+    uploadedDocuments: [],
+  }),
 }));
+
+// ============================================================
+// Auto-save: debounced subscription to key state fields
+// ============================================================
+let _autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let _autoSavePaused = false;
+const AUTO_SAVE_DELAY_MS = 3_000;
+
+/** Pause auto-save (e.g. during resetWorkbench → loadWorkbench transitions) */
+export function pauseAutoSave() { _autoSavePaused = true; if (_autoSaveTimer) { clearTimeout(_autoSaveTimer); _autoSaveTimer = null; } }
+/** Resume auto-save */
+export function resumeAutoSave() { _autoSavePaused = false; }
+
+const AUTO_SAVE_KEYS: (keyof AppState)[] = [
+  'referenceSlides',
+  'referenceSlidePrompts',
+  'generatedSlidePrompts',
+  'generatedSlideResults',
+  'workbenchMessages',
+  'masterTemplate',
+  'promptLibrary',
+  'extractedDocumentText',
+  'uploadedDocuments',
+  'selectedRefSlideIndex',
+  'selectedNewSlideIndex',
+];
+
+useStore.subscribe((state, prevState) => {
+  if (_autoSavePaused) return;
+  if (!state.currentProject) return;
+  // Only trigger auto-save when relevant data fields actually changed
+  const changed = AUTO_SAVE_KEYS.some((key) => state[key] !== prevState[key]);
+  if (!changed) return;
+
+  if (_autoSaveTimer) clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => {
+    if (_autoSavePaused) return;
+    const s = useStore.getState();
+    if (!s.currentProject) return;
+    if (s.saveStatus === 'saving') return;
+    s.saveWorkbench().catch((err: unknown) =>
+      console.error('[AutoSave] failed:', err)
+    );
+  }, AUTO_SAVE_DELAY_MS);
+});

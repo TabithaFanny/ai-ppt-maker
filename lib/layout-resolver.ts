@@ -6,7 +6,7 @@
 import type { SlideRole, LayoutType, StyleKit, LayoutZone } from '@/types/stylekit';
 import type { ContentBlock } from '@/types/elements';
 import type { LayoutPlan, ResolvedZone } from '@/types/generation';
-import { DEFAULT_SLIDE_ROLE_DEFINITIONS } from '@/types/stylekit';
+// DEFAULT_SLIDE_ROLE_DEFINITIONS imported only when needed
 
 /** 预设 zone 布局模板（无 StyleKit 时的 fallback） */
 const FALLBACK_ZONES: Record<LayoutType, LayoutZone[]> = {
@@ -82,6 +82,19 @@ const ROLE_DEFAULT_LAYOUT: Record<SlideRole, LayoutType> = {
   comparison: 'comparison',
   summary: 'grid',
   closing: 'centered',
+  // AI PPT 助手新增角色
+  agenda: 'grid',
+  background: 'two-column',
+  problem: 'two-column',
+  insight: 'two-column',
+  solution: 'two-column',
+  architecture: 'two-column',
+  feature: 'grid',
+  workflow: 'timeline',
+  case: 'two-column',
+  data: 'data-chart',
+  business: 'two-column',
+  team: 'grid',
 };
 
 /**

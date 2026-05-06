@@ -4,7 +4,7 @@
  */
 
 import type { EditPatch } from '@/types/generation';
-import type { PPTJson, Slide, ContentBlock } from '@/types';
+import type { PPTJson, ContentBlock } from '@/types';
 
 export interface DiffChange {
   elementId?: string;

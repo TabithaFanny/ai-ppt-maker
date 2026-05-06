@@ -65,10 +65,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (provider === 'openai') {
-      const apiKey = process.env.OPENAI_API_KEY;
+      const apiKey = process.env.BLT_API_KEY || process.env.OPENAI_API_KEY;
       const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.bltcy.ai/v1';
       if (!apiKey) {
-        return NextResponse.json({ success: false, provider: 'openai', error: 'API Key 未配置' });
+        return NextResponse.json({ success: false, provider: 'openai', error: 'BLT_API_KEY 或 OPENAI_API_KEY 未配置' });
       }
       try {
         const response = await fetch(`${baseUrl}/chat/completions`, {

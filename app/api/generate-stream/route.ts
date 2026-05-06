@@ -3,9 +3,25 @@ import { translateRequirements, generatePPTJson } from '@/lib/claude';
 import { resolveStyleConfig } from '@/lib/style-bridge';
 import { planDeck } from '@/lib/deck-planner';
 import { resolveDeckPlanToPPTJson } from '@/lib/deck-resolver';
+import { rateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
+import { requireApiKey } from '@/lib/require-api-key';
+import { sanitizeTopic, sanitizePromptString, sanitizeTitle, MAX_PROMPT_LENGTH } from '@/lib/sanitize';
 import type { StyleConfig, StyleKit, UserInput } from '@/types';
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request);
+  const rl = rateLimit(ip, RATE_LIMITS.ai);
+  if (!rl.allowed) {
+    return Response.json({ success: false, error: '请求过于频繁，请稍后重试' }, {
+      status: 429,
+      headers: { 'Retry-After': String(Math.ceil(rl.resetMs / 1000)) },
+    });
+  }
+
+  // API Key 守卫
+  const keyCheck = requireApiKey();
+  if (!('ok' in keyCheck)) return keyCheck;
+
   const encoder = new TextEncoder();
   let styleConfig: StyleConfig | undefined;
   let styleKit: StyleKit | null | undefined;
@@ -19,6 +35,10 @@ export async function POST(request: NextRequest) {
     styleKit = body.styleKit;
     userInput = body.userInput;
     useDeckPlan = body.useDeckPlan ?? true;
+    // 净化用户输入
+    userInput.topic = sanitizeTopic(userInput.topic || '');
+    if (userInput.description) userInput.description = sanitizePromptString(userInput.description, MAX_PROMPT_LENGTH);
+    if (userInput.specialRequirements) userInput.specialRequirements = sanitizePromptString(userInput.specialRequirements, 2000);
   } catch (parseError) {
     return new Response(encoder.encode(`data: ${JSON.stringify({
       stage: 'error',
